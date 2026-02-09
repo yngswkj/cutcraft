@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-feature-settings: "palt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    letter-spacing: 0.02em;
+    line-height: 1.8;
+    word-break: auto-phrase;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+    font-feature-settings: "palt" 1;
+  }
+
+  p {
+    line-height: 1.8;
+  }
+
+  input, textarea, select, button {
+    letter-spacing: 0.02em;
+  }
+}
