@@ -9,6 +9,10 @@ export async function GET(
 ) {
   try {
     const { projectId, filename } = await params;
+    if (!/^[A-Za-z0-9._-]+$/.test(filename)) {
+      return NextResponse.json({ error: '不正なファイル名です' }, { status: 400 });
+    }
+
     const filePath = path.join(getProjectDir(projectId), 'images', filename);
 
     const fileBuffer = await fs.readFile(filePath);

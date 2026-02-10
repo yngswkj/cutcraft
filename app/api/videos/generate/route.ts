@@ -16,6 +16,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'シーンが見つかりません' }, { status: 404 });
   }
 
+
+  if (scene.videoApi === 'veo') {
+    return NextResponse.json({ error: 'Veo APIは未実装です。Soraを選択してください。' }, { status: 400 });
+  }
+
   const prompt = scene.videoPrompt || scene.description;
   if (!prompt) {
     return NextResponse.json({ error: 'プロンプトが空です' }, { status: 400 });
@@ -23,8 +28,11 @@ export async function POST(request: Request) {
 
   try {
     const version = scene.generations.length + 1;
-    const inputImagePath = scene.useAsVideoInput && scene.selectedImageId
-      ? scene.images.find(img => img.id === scene.selectedImageId)?.localPath
+    const selectedImage = scene.useAsVideoInput && scene.selectedImageId
+      ? scene.images.find(img => img.id === scene.selectedImageId)
+      : undefined;
+    const inputImagePath = selectedImage
+      ? `images/${selectedImage.sceneId}_${selectedImage.id}.png`
       : undefined;
 
     const generation = await startVideoGeneration({
