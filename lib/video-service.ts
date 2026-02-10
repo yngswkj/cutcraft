@@ -68,10 +68,11 @@ async function startSoraGeneration(
 
   // image-to-video: 入力画像がある場合
   if (params.inputImagePath) {
-    const absPath = path.join(getProjectDir(params.projectId), params.inputImagePath);
+    const normalized = path.normalize(params.inputImagePath).replace(/^([/\\])+/, '');
+    const absPath = path.join(getProjectDir(params.projectId), normalized);
     const imageData = await fs.readFile(absPath);
     const base64 = imageData.toString('base64');
-    const mimeType = params.inputImagePath.endsWith('.png') ? 'image/png' : 'image/jpeg';
+    const mimeType = normalized.endsWith('.png') ? 'image/png' : 'image/jpeg';
     input.push({
       type: 'image_url',
       image_url: {
@@ -165,5 +166,5 @@ export async function downloadVideo(
   const filePath = path.join(videoDir, filename);
   await fs.writeFile(filePath, buffer);
 
-  return `videos/${filename}`;
+  return `/api/files/${projectId}/videos/${filename}`;
 }
