@@ -204,7 +204,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto w-full space-y-6">
       <a
         href="/"
         className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-primary-600 transition"
@@ -213,9 +213,9 @@ export default function SettingsPage() {
         ホームに戻る
       </a>
 
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div>
-          <h1 className="text-2xl font-bold">設定</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">設定</h1>
           <p className="text-sm text-gray-500 mt-1">
             APIキー、モデル、システムプロンプトを管理します
           </p>
@@ -223,7 +223,7 @@ export default function SettingsPage() {
         <button
           onClick={fetchSettings}
           disabled={saving || loading}
-          className="inline-flex items-center gap-1.5 text-sm px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition disabled:opacity-50"
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 text-sm px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition disabled:opacity-50"
         >
           <RefreshCw size={14} />
           再読み込み
@@ -252,13 +252,13 @@ export default function SettingsPage() {
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
               <label className="text-sm font-medium">OPENAI_API_KEY</label>
               <span className={`text-xs px-2 py-0.5 rounded ${sourceBadgeClass(effectiveSources.openaiApiKey)}`}>
                 参照元: {SOURCE_LABELS[effectiveSources.openaiApiKey]}
               </span>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <input
                 type={apiKeyVisibility.openaiApiKey ? 'text' : 'password'}
                 value={apiKeys.openaiApiKey ?? ''}
@@ -267,25 +267,27 @@ export default function SettingsPage() {
                   setApiKeyTouched((prev) => ({ ...prev, openaiApiKey: true }));
                 }}
                 placeholder="新しいキーを入力（変更しない場合は空）"
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full sm:flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
-              <button
-                type="button"
-                onClick={() =>
-                  setApiKeyVisibility((prev) => ({ ...prev, openaiApiKey: !prev.openaiApiKey }))
-                }
-                className="px-3 border border-gray-300 rounded-lg hover:bg-gray-100 transition"
-                title="表示切替"
-              >
-                {apiKeyVisibility.openaiApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-              <button
-                type="button"
-                onClick={() => clearStoredApiKey('openaiApiKey')}
-                className="text-sm px-3 border border-gray-300 rounded-lg hover:bg-gray-100 transition"
-              >
-                クリア
-              </button>
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setApiKeyVisibility((prev) => ({ ...prev, openaiApiKey: !prev.openaiApiKey }))
+                  }
+                  className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition"
+                  title="表示切替"
+                >
+                  {apiKeyVisibility.openaiApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => clearStoredApiKey('openaiApiKey')}
+                  className="text-sm px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition"
+                >
+                  クリア
+                </button>
+              </div>
             </div>
             <p className="text-xs text-gray-500">
               settings.json: {storedMasks.openaiApiKeyMasked ?? '未設定'}
@@ -293,13 +295,13 @@ export default function SettingsPage() {
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
               <label className="text-sm font-medium">GOOGLE_AI_API_KEY</label>
               <span className={`text-xs px-2 py-0.5 rounded ${sourceBadgeClass(effectiveSources.googleAiApiKey)}`}>
                 参照元: {SOURCE_LABELS[effectiveSources.googleAiApiKey]}
               </span>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <input
                 type={apiKeyVisibility.googleAiApiKey ? 'text' : 'password'}
                 value={apiKeys.googleAiApiKey ?? ''}
@@ -308,25 +310,27 @@ export default function SettingsPage() {
                   setApiKeyTouched((prev) => ({ ...prev, googleAiApiKey: true }));
                 }}
                 placeholder="新しいキーを入力（変更しない場合は空）"
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full sm:flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
-              <button
-                type="button"
-                onClick={() =>
-                  setApiKeyVisibility((prev) => ({ ...prev, googleAiApiKey: !prev.googleAiApiKey }))
-                }
-                className="px-3 border border-gray-300 rounded-lg hover:bg-gray-100 transition"
-                title="表示切替"
-              >
-                {apiKeyVisibility.googleAiApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-              <button
-                type="button"
-                onClick={() => clearStoredApiKey('googleAiApiKey')}
-                className="text-sm px-3 border border-gray-300 rounded-lg hover:bg-gray-100 transition"
-              >
-                クリア
-              </button>
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setApiKeyVisibility((prev) => ({ ...prev, googleAiApiKey: !prev.googleAiApiKey }))
+                  }
+                  className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition"
+                  title="表示切替"
+                >
+                  {apiKeyVisibility.googleAiApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => clearStoredApiKey('googleAiApiKey')}
+                  className="text-sm px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition"
+                >
+                  クリア
+                </button>
+              </div>
             </div>
             <p className="text-xs text-gray-500">
               settings.json: {storedMasks.googleAiApiKeyMasked ?? '未設定'}
@@ -336,7 +340,7 @@ export default function SettingsPage() {
       </section>
 
       <section className="bg-white rounded-lg border border-gray-200 p-5 space-y-4">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
           <div className="flex items-center gap-2">
             <Settings2 size={16} className="text-primary-600" />
             <h2 className="font-semibold">モデル設定</h2>
@@ -344,7 +348,7 @@ export default function SettingsPage() {
           <button
             onClick={() => runReset('reset-models', 'モデル設定をデフォルトに戻しました')}
             disabled={saving || loading}
-            className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-100 transition disabled:opacity-50"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 text-sm px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-100 transition disabled:opacity-50"
           >
             <RotateCcw size={14} />
             デフォルトに戻す
@@ -393,7 +397,7 @@ export default function SettingsPage() {
       </section>
 
       <section className="bg-white rounded-lg border border-gray-200 p-5 space-y-4">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
           <div className="flex items-center gap-2">
             <MessageSquare size={16} className="text-primary-600" />
             <h2 className="font-semibold">システムプロンプト設定</h2>
@@ -401,7 +405,7 @@ export default function SettingsPage() {
           <button
             onClick={() => runReset('reset-prompts', 'プロンプト設定をデフォルトに戻しました')}
             disabled={saving || loading}
-            className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-100 transition disabled:opacity-50"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 text-sm px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-100 transition disabled:opacity-50"
           >
             <RotateCcw size={14} />
             デフォルトに戻す
@@ -440,11 +444,11 @@ export default function SettingsPage() {
         )}
       </section>
 
-      <section className="bg-white rounded-lg border border-gray-200 p-5 flex flex-wrap items-center gap-3">
+      <section className="bg-white rounded-lg border border-gray-200 p-5 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3">
         <button
           onClick={handleSave}
           disabled={!canSave}
-          className="inline-flex items-center gap-2 bg-primary-600 text-white px-5 py-2.5 rounded-lg hover:bg-primary-700 transition disabled:opacity-50"
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-primary-600 text-white px-5 py-2.5 rounded-lg hover:bg-primary-700 transition disabled:opacity-50"
         >
           <Save size={16} />
           {saving ? '保存中...' : '保存'}
@@ -452,7 +456,7 @@ export default function SettingsPage() {
         <button
           onClick={() => runReset('reset-all', '設定をすべて初期化しました')}
           disabled={saving || loading}
-          className="inline-flex items-center gap-2 text-sm px-4 py-2.5 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition disabled:opacity-50"
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 text-sm px-4 py-2.5 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition disabled:opacity-50"
         >
           <SlidersHorizontal size={16} />
           全設定をリセット

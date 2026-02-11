@@ -17,6 +17,7 @@ import {
 import type { Project, Scene, VideoApiPreference } from '@/types/project';
 import { estimateProjectCost, formatCost, estimateSceneCost } from '@/lib/cost-calculator';
 import { ProjectStepNav } from '../_components/project-step-nav';
+import { ProjectStepMobileNav } from '../_components/project-step-mobile-nav';
 
 export default function BlueprintPage() {
   const params = useParams();
@@ -153,19 +154,21 @@ export default function BlueprintPage() {
         プロジェクトに戻る
       </a>
 
+      <ProjectStepMobileNav project={project} projectId={projectId} className="mb-4" />
+
       <div className="min-[1000px]:grid min-[1000px]:grid-cols-[220px_minmax(0,1fr)] min-[1000px]:gap-6 items-start">
         <aside className="hidden min-[1000px]:block min-[1000px]:sticky min-[1000px]:top-20">
           <ProjectStepNav project={project} projectId={projectId} />
         </aside>
 
         <div className="min-w-0">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold">設計図</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">設計図</h1>
           <p className="text-gray-500 text-sm mt-1">{project.theme}</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-2 w-full sm:w-auto sm:flex-row sm:flex-nowrap sm:items-center sm:gap-3 sm:shrink-0">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             <label className="text-xs text-gray-500 whitespace-nowrap">動画API</label>
             <select
               value={project.videoApiPreference || 'auto'}
@@ -173,7 +176,7 @@ export default function BlueprintPage() {
                 const pref = e.target.value as VideoApiPreference;
                 saveProject({ ...project, videoApiPreference: pref });
               }}
-              className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full sm:w-auto border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               <option value="auto">おまかせ（AI判断）</option>
               <option value="sora">Sora のみ</option>
@@ -183,7 +186,7 @@ export default function BlueprintPage() {
           <button
             onClick={handleGenerate}
             disabled={generating}
-            className="flex items-center gap-2 bg-primary-600 text-white px-5 py-2.5 rounded-lg hover:bg-primary-700 transition disabled:opacity-50"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 whitespace-nowrap shrink-0 bg-primary-600 text-white px-5 py-2.5 rounded-lg hover:bg-primary-700 transition disabled:opacity-50"
           >
             <Wand2 size={18} />
             {generating ? 'AI生成中...' : project.scenes.length > 0 ? '再生成' : 'AIで設計図を生成'}
@@ -192,7 +195,7 @@ export default function BlueprintPage() {
       </div>
 
       {project.scenes.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6 flex items-center gap-6 text-sm">
+        <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
           <span>
             <strong>{project.scenes.length}</strong> シーン
           </span>
@@ -207,7 +210,7 @@ export default function BlueprintPage() {
           <span className="flex items-center gap-1 text-gray-500">
             <DollarSign size={14} />
             推定コスト: <strong>{formatCost(cost.total)}</strong>
-            <span className="text-xs">(動画: {formatCost(cost.videoCost)}, 画像: {formatCost(cost.imageCost)})</span>
+            <span className="text-xs break-words">(動画: {formatCost(cost.videoCost)}, 画像: {formatCost(cost.imageCost)})</span>
           </span>
         </div>
       )}
@@ -242,7 +245,7 @@ export default function BlueprintPage() {
                       className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                       placeholder="シーンの説明"
                     />
-                    <div className="flex gap-4">
+                    <div className="flex flex-col gap-3 min-[430px]:flex-row min-[430px]:items-end">
                       <div>
                         <label className="text-xs text-gray-500">秒数</label>
                         <input
@@ -251,7 +254,7 @@ export default function BlueprintPage() {
                           onChange={e => setEditForm(f => ({ ...f, durationSec: parseInt(e.target.value) || 8 }))}
                           min={4}
                           max={20}
-                          className="w-20 border border-gray-300 rounded px-2 py-1 text-sm ml-1"
+                          className="w-full min-[430px]:w-20 border border-gray-300 rounded px-2 py-1 text-sm mt-1"
                         />
                       </div>
                       <div>
@@ -259,7 +262,7 @@ export default function BlueprintPage() {
                         <select
                           value={editForm.videoApi || 'sora'}
                           onChange={e => setEditForm(f => ({ ...f, videoApi: e.target.value as 'sora' | 'veo' }))}
-                          className="border border-gray-300 rounded px-2 py-1 text-sm ml-1"
+                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm mt-1"
                         >
                           <option value="sora">Sora</option>
                           <option value="veo">Veo</option>
@@ -271,7 +274,7 @@ export default function BlueprintPage() {
                           type="text"
                           value={editForm.styleDirection || ''}
                           onChange={e => setEditForm(f => ({ ...f, styleDirection: e.target.value }))}
-                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm ml-1"
+                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm mt-1"
                           placeholder="cinematic, warm tones..."
                         />
                       </div>
@@ -292,33 +295,35 @@ export default function BlueprintPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-start gap-3">
-                    <div className="flex-shrink-0 text-gray-400 text-sm font-mono w-6 text-right pt-0.5">
-                      {index + 1}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-medium">{scene.title}</h3>
-                        <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
-                          {scene.durationSec}秒
-                        </span>
-                        <span className={`text-xs px-1.5 py-0.5 rounded ${
-                          scene.videoApi === 'sora'
-                            ? 'bg-blue-50 text-blue-600'
-                            : 'bg-purple-50 text-purple-600'
-                        }`}>
-                          {scene.videoApi === 'sora' ? 'Sora' : 'Veo'}
-                        </span>
-                        <span className="text-xs text-gray-400">
-                          {formatCost(estimateSceneCost(scene))}
-                        </span>
+                  <div className="flex flex-col gap-3 min-[430px]:flex-row min-[430px]:items-start">
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      <div className="flex-shrink-0 text-gray-400 text-sm font-mono w-6 text-right pt-0.5">
+                        {index + 1}
                       </div>
-                      <p className="text-sm text-gray-600 mt-1">{scene.description}</p>
-                      {scene.styleDirection && (
-                        <p className="text-xs text-gray-400 mt-1 italic">{scene.styleDirection}</p>
-                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-medium break-words">{scene.title}</h3>
+                          <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
+                            {scene.durationSec}秒
+                          </span>
+                          <span className={`text-xs px-1.5 py-0.5 rounded ${
+                            scene.videoApi === 'sora'
+                              ? 'bg-blue-50 text-blue-600'
+                              : 'bg-purple-50 text-purple-600'
+                          }`}>
+                            {scene.videoApi === 'sora' ? 'Sora' : 'Veo'}
+                          </span>
+                          <span className="text-xs text-gray-400">
+                            {formatCost(estimateSceneCost(scene))}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600 mt-1 break-words">{scene.description}</p>
+                        {scene.styleDirection && (
+                          <p className="text-xs text-gray-400 mt-1 italic break-words">{scene.styleDirection}</p>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
+                    <div className="flex items-center gap-1 self-end min-[430px]:self-start flex-shrink-0">
                       <button
                         onClick={() => moveScene(index, -1)}
                         disabled={index === 0}
@@ -356,17 +361,17 @@ export default function BlueprintPage() {
             ))}
           </div>
 
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
             <button
               onClick={addScene}
-              className="flex items-center gap-2 text-sm text-gray-600 px-4 py-2 border border-dashed border-gray-300 rounded-lg hover:border-primary-400 hover:text-primary-600 transition"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 text-sm text-gray-600 px-4 py-2 border border-dashed border-gray-300 rounded-lg hover:border-primary-400 hover:text-primary-600 transition"
             >
               <Plus size={16} />
               シーンを追加
             </button>
             <button
               onClick={proceedToNext}
-              className="bg-primary-600 text-white px-6 py-2.5 rounded-lg hover:bg-primary-700 transition"
+              className="w-full sm:w-auto bg-primary-600 text-white px-6 py-2.5 rounded-lg hover:bg-primary-700 transition"
             >
               次のステップへ →
             </button>
@@ -378,3 +383,4 @@ export default function BlueprintPage() {
     </div>
   );
 }
+

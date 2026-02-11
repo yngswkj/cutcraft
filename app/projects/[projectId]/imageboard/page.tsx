@@ -27,6 +27,7 @@ import type {
 } from '@/types/project';
 import type { ImageStylePreset, SettingsApiResponse } from '@/types/settings';
 import { ProjectStepNav } from '../_components/project-step-nav';
+import { ProjectStepMobileNav } from '../_components/project-step-mobile-nav';
 
 const DEFAULT_IMAGE_STYLE_GUIDE: ImageStyleGuide = {
   styleBible: '',
@@ -638,7 +639,7 @@ export default function ImageboardPage() {
   const allScenesHaveImages = project.scenes.every(s => s.images.length > 0);
 
   return (
-    <div className="relative left-1/2 right-1/2 w-screen -ml-[50vw] -mr-[50vw] px-4 sm:px-6">
+    <div className="w-full">
       <div className="max-w-[1700px] mx-auto">
       <a
         href={`/projects/${projectId}`}
@@ -648,9 +649,11 @@ export default function ImageboardPage() {
         プロジェクトに戻る
       </a>
 
-      <div className="flex items-center justify-between gap-4 mb-6">
+      <ProjectStepMobileNav project={project} projectId={projectId} className="mb-4" />
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold">イメージボード</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">イメージボード</h1>
           <p className="text-gray-500 text-sm mt-1">
             各シーンの参考画像を生成しましょう（設定画面の画像モデルを使用）
           </p>
@@ -658,7 +661,7 @@ export default function ImageboardPage() {
         <button
           type="button"
           onClick={openStyleDrawer}
-          className="min-[1000px]:hidden inline-flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
+          className="min-[1000px]:hidden w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
         >
           <PanelRight size={16} />
           共通設定
@@ -700,7 +703,7 @@ export default function ImageboardPage() {
             ref={styleDrawerContentRef}
             className="h-full bg-white border-l border-gray-200 p-4 sm:p-5 space-y-3 overflow-y-auto shadow-2xl"
           >
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
           <div className="flex items-center gap-2">
             <Palette size={16} className="text-primary-600" />
             <h2 className="text-sm font-semibold">プロジェクト共通スタイル / Character Bible</h2>
@@ -709,7 +712,7 @@ export default function ImageboardPage() {
             <button
               onClick={saveStyleGuide}
               disabled={savingStyleGuide}
-              className="inline-flex items-center gap-1.5 bg-primary-600 text-white text-sm px-3.5 py-1.5 rounded-lg hover:bg-primary-700 transition disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1.5 bg-primary-600 text-white text-sm px-3.5 py-1.5 rounded-lg hover:bg-primary-700 transition disabled:opacity-50"
             >
               <Save size={14} />
               {savingStyleGuide ? '保存中...' : '共通設定を保存'}
@@ -738,7 +741,7 @@ export default function ImageboardPage() {
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 min-[430px]:grid-cols-2 gap-3">
           <label className="text-xs text-gray-600 space-y-1">
             <span>スタイルバイブル</span>
             <textarea
@@ -834,7 +837,7 @@ export default function ImageboardPage() {
                         削除
                       </button>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 min-[430px]:grid-cols-2 gap-2">
                       <label className="text-xs text-gray-600 space-y-1">
                         <span>名前</span>
                         <input
@@ -931,7 +934,7 @@ export default function ImageboardPage() {
                 組み込みテンプレートをベースにすると、プロジェクト初期のトーンを素早く揃えられます。
               </p>
             </div>
-            <div className="flex flex-col md:flex-row gap-2">
+            <div className="flex flex-col min-[430px]:flex-row gap-2">
               <select
                 value={selectedTemplateId}
                 onChange={(e) => setSelectedTemplateId(e.target.value)}
@@ -961,7 +964,7 @@ export default function ImageboardPage() {
               </p>
             </div>
 
-            <div className="flex flex-col md:flex-row gap-2">
+            <div className="flex flex-col min-[430px]:flex-row gap-2">
               <input
                 value={presetName}
                 onChange={(e) => setPresetName(e.target.value)}
@@ -977,7 +980,7 @@ export default function ImageboardPage() {
               </button>
             </div>
 
-            <div className="flex flex-col md:flex-row gap-2">
+            <div className="flex flex-col min-[430px]:flex-row gap-2">
               <select
                 value={selectedPresetId}
                 onChange={(e) => setSelectedPresetId(e.target.value)}
@@ -1032,7 +1035,7 @@ export default function ImageboardPage() {
                   {index + 1}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <h3 className="font-medium">{scene.title}</h3>
                     <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
                       {scene.durationSec}秒
@@ -1119,7 +1122,7 @@ export default function ImageboardPage() {
                       <label className="block text-sm font-medium mb-2">
                         生成済み画像（クリックで選択）
                       </label>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 min-[430px]:grid-cols-2 gap-3">
                         {scene.images.map((img: SceneImage) => {
                           const isSelected = scene.selectedImageId === img.id;
                           return (
@@ -1181,17 +1184,17 @@ export default function ImageboardPage() {
         })}
           </div>
 
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between sm:items-center">
         <a
           href={`/projects/${projectId}/blueprint`}
-          className="text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-100 transition"
+          className="w-full sm:w-auto text-center sm:text-left text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-100 transition"
         >
           ← 設計図に戻る
         </a>
         <button
           onClick={proceedToNext}
           disabled={!allScenesHaveImages}
-          className="bg-primary-600 text-white px-6 py-2.5 rounded-lg hover:bg-primary-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full sm:w-auto bg-primary-600 text-white px-6 py-2.5 rounded-lg hover:bg-primary-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
           title={!allScenesHaveImages ? '全シーンの画像を生成してください' : ''}
         >
           次のステップへ →

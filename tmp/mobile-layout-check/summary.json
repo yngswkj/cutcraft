@@ -1,0 +1,242 @@
+[
+  {
+    "viewport": {
+      "width": 320,
+      "height": 568
+    },
+    "route": "home",
+    "navError": null,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 0
+  },
+  {
+    "viewport": {
+      "width": 320,
+      "height": 568
+    },
+    "route": "settings",
+    "navError": null,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 0
+  },
+  {
+    "viewport": {
+      "width": 320,
+      "height": 568
+    },
+    "route": "project-hub",
+    "navError": null,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 0
+  },
+  {
+    "viewport": {
+      "width": 320,
+      "height": 568
+    },
+    "route": "blueprint",
+    "navError": null,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 0
+  },
+  {
+    "viewport": {
+      "width": 320,
+      "height": 568
+    },
+    "route": "imageboard",
+    "navError": null,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 0
+  },
+  {
+    "viewport": {
+      "width": 320,
+      "height": 568
+    },
+    "route": "script",
+    "navError": null,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 0
+  },
+  {
+    "viewport": {
+      "width": 320,
+      "height": 568
+    },
+    "route": "generate",
+    "navError": null,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 0
+  },
+  {
+    "viewport": {
+      "width": 320,
+      "height": 568
+    },
+    "route": "complete",
+    "navError": null,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 0
+  },
+  {
+    "viewport": {
+      "width": 375,
+      "height": 812
+    },
+    "route": "home",
+    "navError": null,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 0
+  },
+  {
+    "viewport": {
+      "width": 375,
+      "height": 812
+    },
+    "route": "settings",
+    "navError": null,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 0
+  },
+  {
+    "viewport": {
+      "width": 375,
+      "height": 812
+    },
+    "route": "project-hub",
+    "navError": null,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 0
+  },
+  {
+    "viewport": {
+      "width": 375,
+      "height": 812
+    },
+    "route": "blueprint",
+    "navError": null,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 0
+  },
+  {
+    "viewport": {
+      "width": 375,
+      "height": 812
+    },
+    "route": "imageboard",
+    "navError": null,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 0
+  },
+  {
+    "viewport": {
+      "width": 375,
+      "height": 812
+    },
+    "route": "script",
+    "navError": null,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 0
+  },
+  {
+    "viewport": {
+      "width": 375,
+      "height": 812
+    },
+    "route": "generate",
+    "navError": null,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 0
+  },
+  {
+    "viewport": {
+      "width": 375,
+      "height": 812
+    },
+    "route": "complete",
+    "navError": null,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 0
+  },
+  {
+    "viewport": {
+      "width": 430,
+      "height": 932
+    },
+    "route": "home",
+    "navError": null,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 0
+  },
+  {
+    "viewport": {
+      "width": 430,
+      "height": 932
+    },
+    "route": "settings",
+    "navError": null,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 0
+  },
+  {
+    "viewport": {
+      "width": 430,
+      "height": 932
+    },
+    "route": "project-hub",
+    "navError": null,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 0
+  },
+  {
+    "viewport": {
+      "width": 430,
+      "height": 932
+    },
+    "route": "blueprint",
+    "navError": null,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 0
+  },
+  {
+    "viewport": {
+      "width": 430,
+      "height": 932
+    },
+    "route": "imageboard",
+    "navError": null,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 0
+  },
+  {
+    "viewport": {
+      "width": 430,
+      "height": 932
+    },
+    "route": "script",
+    "navError": null,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 0
+  },
+  {
+    "viewport": {
+      "width": 430,
+      "height": 932
+    },
+    "route": "generate",
+    "navError": null,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 0
+  },
+  {
+    "viewport": {
+      "width": 430,
+      "height": 932
+    },
+    "route": "complete",
+    "navError": null,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 0
+  }
+]

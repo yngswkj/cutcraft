@@ -23,12 +23,12 @@ export default function RootLayout({
     <html lang="ja" className={notoSansJP.variable}>
       <body className="bg-gray-50 text-gray-800 min-h-screen font-sans">
         <header className="bg-white border-b border-gray-200">
-          <div className="max-w-5xl mx-auto flex items-center justify-between px-6 py-3.5">
-            <a href="/" className="text-lg font-bold tracking-wider text-primary-700">
+          <div className="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-3.5">
+            <a href="/" className="text-lg font-bold tracking-wider text-primary-700 break-words">
               CutCraft
             </a>
-            <nav className="flex items-center gap-4">
-              <span className="text-xs tracking-wide text-gray-400">
+            <nav className="flex items-center gap-3 sm:gap-4">
+              <span className="hidden sm:inline text-xs tracking-wide text-gray-400">
                 動画生成ワークフロー
               </span>
               <a
@@ -40,7 +40,7 @@ export default function RootLayout({
             </nav>
           </div>
         </header>
-        <main className="max-w-5xl mx-auto px-6 py-8">
+        <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
           {children}
         </main>
       </body>

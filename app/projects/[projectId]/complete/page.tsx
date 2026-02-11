@@ -12,6 +12,7 @@ import {
 import type { Project } from '@/types/project';
 import { formatCost, estimateProjectCost } from '@/lib/cost-calculator';
 import { ProjectStepNav } from '../_components/project-step-nav';
+import { ProjectStepMobileNav } from '../_components/project-step-mobile-nav';
 
 export default function CompletePage() {
   const params = useParams();
@@ -61,6 +62,8 @@ export default function CompletePage() {
         プロジェクトに戻る
       </a>
 
+      <ProjectStepMobileNav project={project} projectId={projectId} className="mb-4" />
+
       <div className="min-[1000px]:grid min-[1000px]:grid-cols-[220px_minmax(0,1fr)] min-[1000px]:gap-6 items-start">
         <aside className="hidden min-[1000px]:block min-[1000px]:sticky min-[1000px]:top-20">
           <ProjectStepNav project={project} projectId={projectId} />
@@ -68,14 +71,14 @@ export default function CompletePage() {
 
         <div className="min-w-0">
       <div className="text-center mb-8">
-        <CheckCircle size={64} className="mx-auto mb-4 text-green-500" />
-        <h1 className="text-2xl font-bold">プロジェクト完了</h1>
+        <CheckCircle size={56} className="mx-auto mb-4 text-green-500" />
+        <h1 className="text-xl sm:text-2xl font-bold">プロジェクト完了</h1>
         <p className="text-gray-500 mt-1">{project.name}</p>
       </div>
 
       <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
         <h2 className="text-lg font-bold mb-4">サマリー</h2>
-        <div className="grid grid-cols-3 gap-4 text-center">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
           <div className="bg-gray-50 rounded-lg p-4">
             <Video size={24} className="mx-auto mb-2 text-primary-500" />
             <div className="text-2xl font-bold">{approvedGenerations.length}</div>
@@ -102,7 +105,7 @@ export default function CompletePage() {
               key={scene.id}
               className="border border-gray-200 rounded-lg p-4"
             >
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex flex-wrap items-center gap-2 mb-3">
                 <span className="text-sm text-gray-400 font-mono">{index + 1}.</span>
                 <h3 className="font-medium">{scene.title}</h3>
                 <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">

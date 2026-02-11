@@ -16,6 +16,7 @@ import {
 import type { Project, Scene, VideoGeneration } from '@/types/project';
 import { formatCost, estimateSceneCost } from '@/lib/cost-calculator';
 import { ProjectStepNav } from '../_components/project-step-nav';
+import { ProjectStepMobileNav } from '../_components/project-step-mobile-nav';
 
 export default function GeneratePage() {
   const params = useParams();
@@ -253,19 +254,21 @@ export default function GeneratePage() {
         プロジェクトに戻る
       </a>
 
+      <ProjectStepMobileNav project={project} projectId={projectId} className="mb-4" />
+
       <div className="min-[1000px]:grid min-[1000px]:grid-cols-[220px_minmax(0,1fr)] min-[1000px]:gap-6 items-start">
         <aside className="hidden min-[1000px]:block min-[1000px]:sticky min-[1000px]:top-20">
           <ProjectStepNav project={project} projectId={projectId} />
         </aside>
 
         <div className="min-w-0">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">動画生成</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
+        <h1 className="text-xl sm:text-2xl font-bold">動画生成</h1>
         {hasUngeneratedScenes && (
           <button
             onClick={startBulkGeneration}
             disabled={bulkGenerating}
-            className="flex items-center gap-2 bg-primary-600 text-white px-5 py-2.5 rounded-lg hover:bg-primary-700 transition disabled:opacity-50"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-primary-600 text-white px-5 py-2.5 rounded-lg hover:bg-primary-700 transition disabled:opacity-50"
           >
             <Zap size={18} />
             {bulkGenerating ? '一括生成中...' : '未生成シーンを一括生成'}
@@ -286,9 +289,9 @@ export default function GeneratePage() {
 
             return (
               <div key={scene.id} className="bg-white rounded-lg border border-gray-200 p-5">
-                <div className="flex items-start justify-between mb-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-3">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm text-gray-400 font-mono">{index + 1}.</span>
                       <h3 className="font-medium">{scene.title}</h3>
                       <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
@@ -306,7 +309,7 @@ export default function GeneratePage() {
                       {scene.videoPrompt || scene.description}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+                  <div className="flex flex-wrap items-center gap-2 shrink-0 sm:ml-4">
                     <span className="text-xs text-gray-400">{formatCost(estimateSceneCost(scene))}</span>
                     <button
                       onClick={() => startGeneration(scene)}
@@ -315,7 +318,7 @@ export default function GeneratePage() {
                         scene.generations.some((g) => g.status === 'processing') ||
                         scene.generations.some((g) => g.status === 'completed' && !g.localPath)
                       }
-                      className="flex items-center gap-1.5 bg-primary-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-primary-700 transition disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 bg-primary-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-primary-700 transition disabled:opacity-50"
                     >
                       {scene.generations.some(g => g.status === 'processing') ? (
                         <>
@@ -335,7 +338,7 @@ export default function GeneratePage() {
                 {/* チェーン設定 */}
                 {index > 0 && (
                   <div className="mb-3">
-                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <label className="flex items-start gap-2 text-sm cursor-pointer">
                       <input
                         type="checkbox"
                         checked={scene.chainFromPreviousScene}
@@ -344,7 +347,7 @@ export default function GeneratePage() {
                         className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 disabled:opacity-40"
                       />
                       <Link2 size={14} className={scene.chainFromPreviousScene ? 'text-primary-600' : 'text-gray-400'} />
-                      <span className={`${scene.chainFromPreviousScene ? 'text-primary-700' : 'text-gray-500'}`}>
+                      <span className={`break-words ${scene.chainFromPreviousScene ? 'text-primary-700' : 'text-gray-500'}`}>
                         前のシーンの最終フレームを入力として使用（チェーン）
                       </span>
                       {!canChain && (
@@ -364,49 +367,50 @@ export default function GeneratePage() {
                       {scene.generations.map(gen => (
                         <div key={gen.id}>
                           <div
-                            className={`flex items-center gap-3 p-2 rounded ${
+                            className={`p-2 rounded ${
                               scene.approvedGenerationId === gen.id
                                 ? 'bg-green-50 border border-green-200'
                                 : 'bg-gray-50'
                             }`}
                           >
-                            {statusIcon(gen.status)}
-                            <span className="text-sm">v{gen.version}</span>
-                            <span className="text-xs text-gray-400">
-                              {gen.status === 'completed' && !gen.localPath ? '保存中' : statusLabel(gen.status)}
-                            </span>
-                            <span className="text-xs text-gray-400">{gen.resolution}</span>
-                            <span className="text-xs text-gray-400">{gen.durationSec}秒</span>
-                            <span className="text-xs text-gray-400">{formatCost(gen.estimatedCost)}</span>
-                            {gen.chainedFramePath && (
-                              <span className="text-xs text-primary-500 flex items-center gap-1">
-                                <Link2 size={12} />
-                                チェーン
+                            <div className="flex flex-wrap items-center gap-2">
+                              {statusIcon(gen.status)}
+                              <span className="text-sm">v{gen.version}</span>
+                              <span className="text-xs text-gray-400">
+                                {gen.status === 'completed' && !gen.localPath ? '保存中' : statusLabel(gen.status)}
                               </span>
-                            )}
-                            <div className="flex-1" />
-                            {gen.status === 'completed' && (
-                              <>
-                                {gen.localPath && (
-                                  <span className="text-xs text-green-600">保存済み</span>
-                                )}
-                                {scene.approvedGenerationId !== gen.id && gen.localPath && (
-                                  <button
-                                    onClick={() => approveGeneration(scene, gen.id)}
-                                    className="text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700 transition"
-                                  >
-                                    承認
-                                  </button>
-                                )}
-                                {scene.approvedGenerationId === gen.id && (
-                                  <span className="text-xs text-green-700 font-medium">承認済み</span>
-                                )}
-                              </>
-                            )}
+                              <span className="text-xs text-gray-400">{gen.resolution}</span>
+                              <span className="text-xs text-gray-400">{gen.durationSec}秒</span>
+                              <span className="text-xs text-gray-400">{formatCost(gen.estimatedCost)}</span>
+                              {gen.chainedFramePath && (
+                                <span className="text-xs text-primary-500 inline-flex items-center gap-1">
+                                  <Link2 size={12} />
+                                  チェーン
+                                </span>
+                              )}
+                              {gen.status === 'completed' && (
+                                <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+                                  {gen.localPath && (
+                                    <span className="text-xs text-green-600">保存済み</span>
+                                  )}
+                                  {scene.approvedGenerationId !== gen.id && gen.localPath && (
+                                    <button
+                                      onClick={() => approveGeneration(scene, gen.id)}
+                                      className="text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700 transition"
+                                    >
+                                      承認
+                                    </button>
+                                  )}
+                                  {scene.approvedGenerationId === gen.id && (
+                                    <span className="text-xs text-green-700 font-medium">承認済み</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </div>
                           {/* 動画プレビュー */}
                           {gen.status === 'completed' && gen.localPath && (
-                            <div className="mt-2 ml-6">
+                            <div className="mt-2 sm:ml-6">
                               <video
                                 src={gen.localPath}
                                 controls
@@ -427,17 +431,17 @@ export default function GeneratePage() {
         </div>
       )}
 
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between sm:items-center">
         <a
           href={`/projects/${projectId}/script`}
-          className="text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-100 transition"
+          className="w-full sm:w-auto text-center sm:text-left text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-100 transition"
         >
           ← 台本に戻る
         </a>
         <button
           onClick={proceedToComplete}
           disabled={!allScenesApproved}
-          className="bg-primary-600 text-white px-6 py-2.5 rounded-lg hover:bg-primary-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full sm:w-auto bg-primary-600 text-white px-6 py-2.5 rounded-lg hover:bg-primary-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
           title={!allScenesApproved ? '全シーンの動画を承認してください' : ''}
         >
           完了へ →

@@ -65,12 +65,12 @@ export default function HomePage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="max-w-3xl mx-auto w-full">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
         <h1 className="text-xl font-bold tracking-wide">プロジェクト</h1>
         <button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-1.5 bg-primary-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-primary-700 transition"
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 bg-primary-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-primary-700 transition"
         >
           <Plus size={16} />
           新規作成
@@ -105,18 +105,18 @@ export default function HomePage() {
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
               <button
                 type="submit"
                 disabled={creating || !name.trim() || !theme.trim()}
-                className="bg-primary-600 text-white text-sm px-5 py-2 rounded-lg hover:bg-primary-700 transition disabled:opacity-50"
+                className="w-full sm:w-auto bg-primary-600 text-white text-sm px-5 py-2 rounded-lg hover:bg-primary-700 transition disabled:opacity-50"
               >
                 {creating ? '作成中…' : '作成'}
               </button>
               <button
                 type="button"
                 onClick={() => setShowCreate(false)}
-                className="text-gray-500 text-sm px-4 py-2 hover:bg-gray-100 rounded-lg transition"
+                className="w-full sm:w-auto text-gray-500 text-sm px-4 py-2 hover:bg-gray-100 rounded-lg transition"
               >
                 キャンセル
               </button>
@@ -137,7 +137,7 @@ export default function HomePage() {
             <a
               key={project.id}
               href={`/projects/${project.id}`}
-              className="flex items-center gap-4 bg-white rounded-lg border border-gray-200 px-4 py-3.5 hover:border-primary-300 transition group"
+              className="flex items-start gap-3 sm:items-center sm:gap-4 bg-white rounded-lg border border-gray-200 px-4 py-3.5 hover:border-primary-300 transition group"
             >
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-gray-900 group-hover:text-primary-600 transition truncate">
@@ -146,7 +146,7 @@ export default function HomePage() {
                 <p className="text-xs text-gray-400 mt-0.5 truncate leading-relaxed">
                   {project.theme}
                 </p>
-                <div className="flex items-center gap-3 mt-1.5 text-[11px] text-gray-400">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[11px] text-gray-400">
                   <span className="flex items-center gap-0.5">
                     <Clock size={10} />
                     {new Date(project.updatedAt).toLocaleDateString('ja-JP')}
@@ -164,12 +164,12 @@ export default function HomePage() {
                   e.stopPropagation();
                   handleDelete(project.id);
                 }}
-                className="p-1.5 text-gray-300 hover:text-red-500 transition opacity-0 group-hover:opacity-100"
+                className="p-1.5 text-gray-400 hover:text-red-500 transition"
                 title="削除"
               >
                 <Trash2 size={15} />
               </button>
-              <ChevronRight size={16} className="text-gray-300 group-hover:text-primary-400 transition flex-shrink-0" />
+              <ChevronRight size={16} className="hidden sm:block text-gray-300 group-hover:text-primary-400 transition flex-shrink-0" />
             </a>
           ))}
         </div>

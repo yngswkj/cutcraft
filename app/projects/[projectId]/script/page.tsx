@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import type { Project, Scene } from '@/types/project';
 import { ProjectStepNav } from '../_components/project-step-nav';
+import { ProjectStepMobileNav } from '../_components/project-step-mobile-nav';
 
 export default function ScriptPage() {
   const params = useParams();
@@ -253,15 +254,17 @@ export default function ScriptPage() {
         プロジェクトに戻る
       </a>
 
+      <ProjectStepMobileNav project={project} projectId={projectId} className="mb-4" />
+
       <div className="min-[1000px]:grid min-[1000px]:grid-cols-[220px_minmax(0,1fr)] min-[1000px]:gap-6 items-start">
         <aside className="hidden min-[1000px]:block min-[1000px]:sticky min-[1000px]:top-20">
           <ProjectStepNav project={project} projectId={projectId} />
         </aside>
 
         <div className="min-w-0">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold">台本</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">台本</h1>
           <p className="text-gray-500 text-sm mt-1">
             各シーンの動画生成プロンプトを作成しましょう
           </p>
@@ -270,7 +273,7 @@ export default function ScriptPage() {
           <button
             onClick={generateAllScripts}
             disabled={bulkGenerating}
-            className="flex items-center gap-2 bg-primary-600 text-white px-5 py-2.5 rounded-lg hover:bg-primary-700 transition disabled:opacity-50"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-primary-600 text-white px-5 py-2.5 rounded-lg hover:bg-primary-700 transition disabled:opacity-50"
           >
             <Zap size={18} />
             {bulkGenerating ? '一括生成中...' : '未作成の台本を一括生成'}
@@ -299,7 +302,7 @@ export default function ScriptPage() {
                   {index + 1}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <h3 className="font-medium">{scene.title}</h3>
                     <span className={`text-xs px-1.5 py-0.5 rounded ${
                       scene.videoApi === 'sora'
@@ -327,13 +330,13 @@ export default function ScriptPage() {
                   {selectedImage && (
                     <div>
                       <label className="block text-sm font-medium mb-2">参考画像</label>
-                      <div className="relative inline-block">
+                      <div className="relative inline-block w-full max-w-xs sm:max-w-sm">
                         <Image
                           src={selectedImage.localPath}
                           alt={selectedImage.prompt}
                           width={256}
                           height={144}
-                          className="w-64 rounded-lg border border-gray-200"
+                          className="w-full rounded-lg border border-gray-200"
                         />
                         {scene.useAsVideoInput && (
                           <div className="absolute top-2 left-2 bg-primary-500 text-white px-2 py-1 rounded text-xs flex items-center gap-1">
@@ -346,7 +349,7 @@ export default function ScriptPage() {
                   )}
 
                   <div>
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex flex-col gap-2 min-[430px]:flex-row min-[430px]:items-center min-[430px]:justify-between mb-2">
                       <label className="block text-sm font-medium">
                         動画生成プロンプト（英語）
                       </label>
@@ -373,7 +376,7 @@ export default function ScriptPage() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 min-[430px]:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-sm font-medium mb-1">カメラワーク</label>
                       <input
@@ -429,17 +432,17 @@ export default function ScriptPage() {
                   </div>
 
                   {isEditing && (
-                    <div className="flex gap-2 pt-2">
+                    <div className="flex flex-col min-[430px]:flex-row gap-2 pt-2">
                       <button
                         onClick={() => saveEdit(scene.id)}
-                        className="flex items-center gap-1 text-sm bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition"
+                        className="w-full min-[430px]:w-auto inline-flex items-center justify-center gap-1 text-sm bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition"
                       >
                         <Save size={14} />
                         保存
                       </button>
                       <button
                         onClick={() => cancelEdit(scene.id)}
-                        className="text-sm text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-100 transition"
+                        className="w-full min-[430px]:w-auto text-sm text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-100 transition"
                       >
                         キャンセル
                       </button>
@@ -452,17 +455,17 @@ export default function ScriptPage() {
         })}
       </div>
 
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between sm:items-center">
         <a
           href={`/projects/${projectId}/imageboard`}
-          className="text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-100 transition"
+          className="w-full sm:w-auto text-center sm:text-left text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-100 transition"
         >
           ← イメージボードに戻る
         </a>
         <button
           onClick={proceedToNext}
           disabled={!allScenesHavePrompts}
-          className="bg-primary-600 text-white px-6 py-2.5 rounded-lg hover:bg-primary-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full sm:w-auto bg-primary-600 text-white px-6 py-2.5 rounded-lg hover:bg-primary-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
           title={!allScenesHavePrompts ? '全シーンの台本を作成してください' : ''}
         >
           次のステップへ →
