@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import type { Project } from '@/types/project';
 import { formatCost, estimateProjectCost } from '@/lib/cost-calculator';
+import { ProjectStepNav } from '../_components/project-step-nav';
 
 export default function CompletePage() {
   const params = useParams();
@@ -60,6 +61,12 @@ export default function CompletePage() {
         プロジェクトに戻る
       </a>
 
+      <div className="min-[1000px]:grid min-[1000px]:grid-cols-[220px_minmax(0,1fr)] min-[1000px]:gap-6 items-start">
+        <aside className="hidden min-[1000px]:block min-[1000px]:sticky min-[1000px]:top-20">
+          <ProjectStepNav project={project} projectId={projectId} />
+        </aside>
+
+        <div className="min-w-0">
       <div className="text-center mb-8">
         <CheckCircle size={64} className="mx-auto mb-4 text-green-500" />
         <h1 className="text-2xl font-bold">プロジェクト完了</h1>
@@ -133,6 +140,8 @@ export default function CompletePage() {
         >
           プロジェクト一覧に戻る
         </a>
+      </div>
+        </div>
       </div>
     </div>
   );

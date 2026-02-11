@@ -27,9 +27,17 @@ export default function RootLayout({
             <a href="/" className="text-lg font-bold tracking-wider text-primary-700">
               CutCraft
             </a>
-            <span className="text-xs tracking-wide text-gray-400">
-              動画生成ワークフロー
-            </span>
+            <nav className="flex items-center gap-4">
+              <span className="text-xs tracking-wide text-gray-400">
+                動画生成ワークフロー
+              </span>
+              <a
+                href="/settings"
+                className="text-sm text-gray-500 hover:text-primary-600 transition"
+              >
+                設定
+              </a>
+            </nav>
           </div>
         </header>
         <main className="max-w-5xl mx-auto px-6 py-8">

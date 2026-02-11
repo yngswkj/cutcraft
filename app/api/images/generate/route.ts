@@ -4,9 +4,114 @@ import path from 'path';
 import { generateImage } from '@/lib/openai';
 import { getProject, updateProject } from '@/lib/project-store';
 import { ensureProjectDir, saveFile, getProjectDir } from '@/lib/file-storage';
-import type { SceneImage } from '@/types/project';
+import type { CharacterProfile, Project, Scene, SceneImage } from '@/types/project';
 
 const SAFE_ID_REGEX = /^[A-Za-z0-9-]+$/;
+
+function nonEmpty(value: string): string {
+  return value.trim();
+}
+
+function appendCharacterProfileLine(lines: string[], character: CharacterProfile, index: number): void {
+  lines.push(`${index + 1}. ${character.name || `Character ${index + 1}`}`);
+  if (nonEmpty(character.role)) {
+    lines.push(`   - Role: ${character.role}`);
+  }
+  if (nonEmpty(character.ethnicityNationality)) {
+    lines.push(`   - Ethnicity/Nationality: ${character.ethnicityNationality}`);
+  }
+  if (nonEmpty(character.ageAppearance)) {
+    lines.push(`   - Age appearance: ${character.ageAppearance}`);
+  }
+  if (nonEmpty(character.genderPresentation)) {
+    lines.push(`   - Gender presentation: ${character.genderPresentation}`);
+  }
+  if (nonEmpty(character.appearanceTraits)) {
+    lines.push(`   - Appearance traits: ${character.appearanceTraits}`);
+  }
+  if (nonEmpty(character.wardrobe)) {
+    lines.push(`   - Wardrobe baseline: ${character.wardrobe}`);
+  }
+  if (nonEmpty(character.mustKeep)) {
+    lines.push(`   - Must keep: ${character.mustKeep}`);
+  }
+}
+
+function buildConsistentImagePrompt(
+  project: Project,
+  scene: Scene,
+  scenePrompt: string,
+): string {
+  const guide = project.imageStyleGuide;
+  const characterMap = new Map(project.characterBible.map((character) => [character.id, character]));
+  const cast = scene.castCharacterIds
+    .map((id) => characterMap.get(id))
+    .filter((character): character is CharacterProfile => Boolean(character));
+  const sections: string[] = [
+    'You are generating a storyboard reference image for one scene in a single project.',
+    'Keep visual consistency with other scenes in the same project.',
+    '',
+    `Project theme: ${project.theme}`,
+    `Scene title: ${scene.title}`,
+    `Scene description: ${scene.description}`,
+    `Scene style direction: ${scene.styleDirection}`,
+    '',
+    `Scene-specific request: ${scenePrompt}`,
+    '',
+    'Character continuity lock (must keep):',
+  ];
+
+  if (cast.length > 0) {
+    sections.push(
+      '- Keep each listed character as the same person across scenes.',
+      '- Do not change ethnicity/nationality, age appearance, gender presentation, facial traits, or wardrobe baseline unless explicitly requested by the user.',
+      '- If the scene request is ambiguous, prioritize the character bible constraints.',
+      '',
+      'Scene cast:',
+    );
+    cast.forEach((character, index) => appendCharacterProfileLine(sections, character, index));
+  } else if (project.characterBible.length > 0) {
+    sections.push(
+      '- No explicit cast was selected for this scene.',
+      '- If people are shown, infer from project context and avoid identity drift from previously established characters.',
+    );
+  } else {
+    sections.push(
+      '- Character bible is empty for this project. Keep human attributes consistent with scene context when possible.',
+    );
+  }
+
+  sections.push(
+    '',
+    'Global style bible (must apply to this image):',
+  );
+
+  if (nonEmpty(guide.styleBible)) {
+    sections.push(`- Visual style: ${guide.styleBible}`);
+  }
+  if (nonEmpty(guide.colorPalette)) {
+    sections.push(`- Color palette: ${guide.colorPalette}`);
+  }
+  if (nonEmpty(guide.lightingMood)) {
+    sections.push(`- Lighting and mood: ${guide.lightingMood}`);
+  }
+  if (nonEmpty(guide.cameraLanguage)) {
+    sections.push(`- Camera language / composition: ${guide.cameraLanguage}`);
+  }
+  if (nonEmpty(guide.negativePrompt)) {
+    sections.push(`- Avoid: ${guide.negativePrompt}`);
+  }
+
+  sections.push(
+    '',
+    'Consistency constraints:',
+    '- Keep color grading and cinematic language aligned with the project-wide style.',
+    '- Do not change era, rendering medium, or tone unless explicitly instructed in scene-specific request.',
+    '- Output a single high-quality horizontal image suitable for 16:9 video previsualization.',
+  );
+
+  return sections.join('\n');
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -36,8 +141,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'シーンが見つかりません' }, { status: 404 });
     }
 
-    // DALL-E 3で画像生成
-    const result = await generateImage(prompt);
+    // 設定された画像モデルで画像生成
+    const consistentPrompt = buildConsistentImagePrompt(project, scene, prompt);
+    const result = await generateImage(consistentPrompt);
 
     // Base64をBufferに変換
     const imageBuffer = Buffer.from(result.b64_json, 'base64');
@@ -53,7 +159,7 @@ export async function POST(req: NextRequest) {
     const sceneImage: SceneImage = {
       id: imageId,
       sceneId,
-      prompt: result.revised_prompt || prompt,
+      prompt: result.revised_prompt || consistentPrompt,
       localPath: `/api/files/${projectId}/images/${fileName}`,
       width: 1792,
       height: 1024,

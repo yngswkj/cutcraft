@@ -1,53 +1,121 @@
 import OpenAI from 'openai';
+import { GoogleGenAI } from '@google/genai';
+import { getEffectiveSettings, renderPromptTemplate } from './settings';
 import type { BlueprintResult, VideoApiPreference } from '@/types/project';
 
-function getClient(): OpenAI {
-  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+function getClient(apiKey: string): OpenAI {
+  return new OpenAI({ apiKey });
 }
 
-function buildBlueprintPrompt(apiPreference: VideoApiPreference): string {
+async function getConfiguredOpenAIClient(): Promise<{ client: OpenAI; settings: Awaited<ReturnType<typeof getEffectiveSettings>> }> {
+  const settings = await getEffectiveSettings();
+  const apiKey = settings.apiKeys.openaiApiKey;
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY が設定されていません（設定画面または .env.local）');
+  }
+  return {
+    client: getClient(apiKey),
+    settings,
+  };
+}
+
+function resolveGeminiImageModel(modelName: string): string | null {
+  const normalized = modelName.trim().toLowerCase();
+
+  if (
+    normalized === 'nanobananapro' ||
+    normalized === 'nano-banana-pro' ||
+    normalized === 'nano banana pro'
+  ) {
+    return 'gemini-3-pro-image-preview';
+  }
+  if (
+    normalized === 'nanobanana' ||
+    normalized === 'nano-banana' ||
+    normalized === 'nano banana'
+  ) {
+    return 'gemini-2.5-flash-image';
+  }
+  if (normalized.startsWith('gemini-') && normalized.includes('image')) {
+    return modelName.trim();
+  }
+  return null;
+}
+
+async function generateImageWithGemini(
+  prompt: string,
+  model: string,
+  googleApiKey: string,
+): Promise<GenerateImageResult> {
+  const ai = new GoogleGenAI({ apiKey: googleApiKey });
+  const response = await ai.models.generateContent({
+    model,
+    contents: prompt,
+  });
+
+  const parts = response.candidates?.[0]?.content?.parts ?? [];
+  let imageBase64: string | null = null;
+  const revisedPromptTexts: string[] = [];
+
+  for (const part of parts) {
+    if (part.text) {
+      revisedPromptTexts.push(part.text);
+    }
+    if (part.inlineData?.data) {
+      const mimeType = part.inlineData.mimeType || '';
+      if (!mimeType || mimeType.startsWith('image/')) {
+        imageBase64 = part.inlineData.data;
+      }
+    }
+  }
+
+  if (!imageBase64) {
+    throw new Error('Gemini画像生成の結果から画像データを取得できませんでした');
+  }
+
+  return {
+    b64_json: imageBase64,
+    revised_prompt: revisedPromptTexts.join('\n').trim() || prompt,
+  };
+}
+
+function buildBlueprintApiInstruction(apiPreference: VideoApiPreference): string {
   const apiInstruction = apiPreference === 'auto'
     ? `- suggestedApi: シーンの特性に応じて最適なAPIを選択する
-  - "sora": 動きが大きいシーン、長尺（最大20秒）、カメラワークが複雑なシーン向き
+  - "sora": 動きが大きいシーン、短中尺（4/8/12秒）、カメラワークが複雑なシーン向き
   - "veo": 短尺（最大8秒）、高品質・高解像度が必要なシーン、静的な美しさ重視のシーン向き`
     : `- suggestedApi: すべてのシーンで "${apiPreference}" を指定すること
   ${apiPreference === 'sora'
-    ? '- Sora の制約: 各シーン最大20秒'
+    ? '- Sora の制約: 各シーンは4/8/12秒'
     : '- Veo の制約: 各シーン最大8秒'}`;
 
-  return `あなたは映像ディレクターです。ユーザーのテーマから約2分間の動画の設計図を作成してください。
-
-以下のJSON形式で出力してください:
-{
-  "scenes": [
-    {
-      "title": "シーンタイトル",
-      "description": "シーンの詳細な説明（映像内容、雰囲気、色調）",
-      "durationSec": 秒数,
-      "styleDirection": "映像スタイルの方向性（英語キーワード）",
-      "suggestedApi": "sora" または "veo"
-    }
-  ]
+  return apiInstruction;
 }
 
-制約:
-- 合計秒数は約120秒になるようにする
-- 8〜15シーン程度に分割
-- シーン間の自然なつながりを意識
-${apiInstruction}
-- description は映像として具体的に想像できる内容にする
-- styleDirection は英語のキーワードで（例: "cinematic, warm tones, shallow depth of field"）`;
+function buildBlueprintPrompt(
+  apiPreference: VideoApiPreference,
+  promptTemplate: string,
+): string {
+  const apiInstruction = buildBlueprintApiInstruction(apiPreference);
+  return renderPromptTemplate(promptTemplate, {
+    API_INSTRUCTION: apiInstruction,
+  });
 }
 
 export async function generateBlueprint(
   theme: string,
   apiPreference: VideoApiPreference = 'auto',
 ): Promise<BlueprintResult> {
-  const client = getClient();
+  const { client, settings } = await getConfiguredOpenAIClient();
+  const systemPrompt = buildBlueprintPrompt(
+    apiPreference,
+    settings.prompts.blueprintSystemPromptTemplate,
+  );
+
   const response = await client.chat.completions.create({
-    model: 'gpt-4o',
+    model: settings.models.llmModel,
     messages: [
-      { role: 'system', content: buildBlueprintPrompt(apiPreference) },
+      { role: 'system', content: systemPrompt },
       { role: 'user', content: theme },
     ],
     response_format: { type: 'json_object' },
@@ -65,9 +133,25 @@ export interface GenerateImageResult {
 }
 
 export async function generateImage(prompt: string): Promise<GenerateImageResult> {
-  const client = getClient();
+  const settings = await getEffectiveSettings();
+  const imageModel = settings.models.imageModel.trim();
+  const geminiImageModel = resolveGeminiImageModel(imageModel);
+
+  if (geminiImageModel) {
+    const googleApiKey = settings.apiKeys.googleAiApiKey;
+    if (!googleApiKey) {
+      throw new Error('GOOGLE_AI_API_KEY が設定されていません（設定画面または .env.local）');
+    }
+    return generateImageWithGemini(prompt, geminiImageModel, googleApiKey);
+  }
+
+  const openAiKey = settings.apiKeys.openaiApiKey;
+  if (!openAiKey) {
+    throw new Error('OPENAI_API_KEY が設定されていません（設定画面または .env.local）');
+  }
+  const client = getClient(openAiKey);
   const response = await client.images.generate({
-    model: 'dall-e-3',
+    model: imageModel,
     prompt,
     n: 1,
     size: '1792x1024', // 16:9 横長（動画に適したアスペクト比）
@@ -104,32 +188,23 @@ export async function generateVideoScript(
   styleDirection: string,
   videoApi: 'sora' | 'veo',
 ): Promise<GenerateScriptResult> {
-  const client = getClient();
-  const systemPrompt = `あなたは映像プロダクションの専門家です。シーン情報から${videoApi === 'sora' ? 'Sora' : 'Veo'}向けの動画生成プロンプトを作成してください。
-
-以下のJSON形式で出力してください:
-{
-  "videoPrompt": "動画生成用の詳細なプロンプト（英語、1-2文）",
-  "metadata": {
-    "cameraWork": "カメラワークの説明（日本語）",
-    "movement": "動きの説明（日本語）",
-    "lighting": "ライティングの説明（日本語）",
-    "style": "スタイル・雰囲気の説明（日本語）"
-  }
-}
-
-制約:
-- videoPrompt は英語で具体的に（カメラアングル、動き、ライティング、色調を含む）
-- ${videoApi === 'sora' ? 'Sora は長尺と複雑なカメラワークが得意' : 'Veo は短尺で高品質、静的な美しさが得意'}
-- 映像として実現可能な内容にする
-- metadata は日本語で分かりやすく`;
+  const { client, settings } = await getConfiguredOpenAIClient();
+  const systemPrompt = renderPromptTemplate(
+    settings.prompts.scriptSystemPromptTemplate,
+    {
+      VIDEO_API_LABEL: videoApi === 'sora' ? 'Sora' : 'Veo',
+      VIDEO_API_HINT: videoApi === 'sora'
+        ? 'Sora 2 は4/8/12秒の短中尺と複雑なカメラワークが得意'
+        : 'Veo は短尺で高品質、静的な美しさが得意',
+    },
+  );
 
   const userPrompt = `【シーンタイトル】${sceneTitle}
 【シーン説明】${sceneDescription}
 【スタイル方向性】${styleDirection}`;
 
   const response = await client.chat.completions.create({
-    model: 'gpt-4o',
+    model: settings.models.llmModel,
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getProject, updateProject, deleteProject } from '@/lib/project-store';
 import type {
+  CharacterProfile,
+  ImageStyleGuide,
   Project,
   PromptMetadata,
   Scene,
@@ -19,6 +21,8 @@ const WORKFLOW_STEPS = new Set<WorkflowStep>(['blueprint', 'imageboard', 'script
 const VIDEO_API_PREFERENCES = new Set<VideoApiPreference>(['auto', 'sora', 'veo']);
 const VIDEO_APIS = new Set<'sora' | 'veo'>(['sora', 'veo']);
 const VIDEO_STATUSES = new Set<VideoStatus>(['queued', 'processing', 'completed', 'failed']);
+const MAX_CHARACTER_COUNT = 30;
+const MAX_CHARACTER_FIELD_LENGTH = 1000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -95,6 +99,108 @@ function parsePromptMetadata(value: unknown): PromptMetadata | null {
     return null;
   }
   return { cameraWork, movement, lighting, style };
+}
+
+function parseImageStyleGuide(value: unknown): ImageStyleGuide | null {
+  if (!isRecord(value)) return null;
+  const styleBible = parseString(value.styleBible);
+  const colorPalette = parseString(value.colorPalette);
+  const lightingMood = parseString(value.lightingMood);
+  const cameraLanguage = parseString(value.cameraLanguage);
+  const negativePrompt = parseString(value.negativePrompt);
+
+  if (
+    styleBible === null ||
+    colorPalette === null ||
+    lightingMood === null ||
+    cameraLanguage === null ||
+    negativePrompt === null
+  ) {
+    return null;
+  }
+
+  if (
+    styleBible.length > 4000 ||
+    colorPalette.length > 4000 ||
+    lightingMood.length > 4000 ||
+    cameraLanguage.length > 4000 ||
+    negativePrompt.length > 4000
+  ) {
+    return null;
+  }
+
+  return {
+    styleBible,
+    colorPalette,
+    lightingMood,
+    cameraLanguage,
+    negativePrompt,
+  };
+}
+
+function parseCharacterField(value: unknown): string | null {
+  const text = parseString(value);
+  if (text === null) return null;
+  if (text.length > MAX_CHARACTER_FIELD_LENGTH) return null;
+  return text;
+}
+
+function parseCharacterProfile(value: unknown): CharacterProfile | null {
+  if (!isRecord(value)) return null;
+
+  const id = parseSafeId(value.id);
+  const name = parseCharacterField(value.name);
+  const role = parseCharacterField(value.role);
+  const ethnicityNationality = parseCharacterField(value.ethnicityNationality);
+  const ageAppearance = parseCharacterField(value.ageAppearance);
+  const genderPresentation = parseCharacterField(value.genderPresentation);
+  const appearanceTraits = parseCharacterField(value.appearanceTraits);
+  const wardrobe = parseCharacterField(value.wardrobe);
+  const mustKeep = parseCharacterField(value.mustKeep);
+
+  if (
+    id === null ||
+    name === null ||
+    role === null ||
+    ethnicityNationality === null ||
+    ageAppearance === null ||
+    genderPresentation === null ||
+    appearanceTraits === null ||
+    wardrobe === null ||
+    mustKeep === null
+  ) {
+    return null;
+  }
+
+  return {
+    id,
+    name,
+    role,
+    ethnicityNationality,
+    ageAppearance,
+    genderPresentation,
+    appearanceTraits,
+    wardrobe,
+    mustKeep,
+  };
+}
+
+function parseCharacterBible(value: unknown): CharacterProfile[] | null {
+  if (!Array.isArray(value)) return null;
+  if (value.length > MAX_CHARACTER_COUNT) return null;
+
+  const profiles: CharacterProfile[] = [];
+  const usedIds = new Set<string>();
+
+  for (let i = 0; i < value.length; i += 1) {
+    const profile = parseCharacterProfile(value[i]);
+    if (!profile) return null;
+    if (usedIds.has(profile.id)) return null;
+    usedIds.add(profile.id);
+    profiles.push(profile);
+  }
+
+  return profiles;
 }
 
 function parseSceneImage(value: unknown, sceneId: string, projectId: string): SceneImage | null {
@@ -241,6 +347,18 @@ function parseScene(value: unknown, fallbackOrder: number, projectId: string): S
 
   if ('images' in value && !Array.isArray(value.images)) return null;
   if ('generations' in value && !Array.isArray(value.generations)) return null;
+  if ('castCharacterIds' in value && !Array.isArray(value.castCharacterIds)) return null;
+
+  const castCharacterIdsRaw = Array.isArray(value.castCharacterIds) ? value.castCharacterIds : [];
+  const castCharacterIds: string[] = [];
+  const castIdSet = new Set<string>();
+  for (const castIdRaw of castCharacterIdsRaw) {
+    const castId = parseSafeId(castIdRaw);
+    if (!castId) return null;
+    if (castIdSet.has(castId)) continue;
+    castIdSet.add(castId);
+    castCharacterIds.push(castId);
+  }
 
   const imagesRaw = Array.isArray(value.images) ? value.images : [];
   const images: SceneImage[] = [];
@@ -301,6 +419,7 @@ function parseScene(value: unknown, fallbackOrder: number, projectId: string): S
     durationSec,
     styleDirection,
     videoApi,
+    castCharacterIds,
     images,
     selectedImageId,
     useAsVideoInput,
@@ -365,6 +484,22 @@ function sanitizeProjectUpdate(existing: Project, body: unknown, projectId: stri
     next.videoApiPreference = videoApiPreference;
   }
 
+  if ('imageStyleGuide' in body) {
+    const imageStyleGuide = parseImageStyleGuide(body.imageStyleGuide);
+    if (!imageStyleGuide) {
+      throw new Error('imageStyleGuide が不正です');
+    }
+    next.imageStyleGuide = imageStyleGuide;
+  }
+
+  if ('characterBible' in body) {
+    const characterBible = parseCharacterBible(body.characterBible);
+    if (!characterBible) {
+      throw new Error('characterBible が不正です');
+    }
+    next.characterBible = characterBible;
+  }
+
   if ('scenes' in body) {
     if (!Array.isArray(body.scenes)) {
       throw new Error('scenes が不正です');
@@ -380,6 +515,12 @@ function sanitizeProjectUpdate(existing: Project, body: unknown, projectId: stri
     }
     next.scenes = scenes;
   }
+
+  const validCharacterIds = new Set(next.characterBible.map((character) => character.id));
+  next.scenes = next.scenes.map((scene) => ({
+    ...scene,
+    castCharacterIds: scene.castCharacterIds.filter((id) => validCharacterIds.has(id)),
+  }));
 
   return next;
 }

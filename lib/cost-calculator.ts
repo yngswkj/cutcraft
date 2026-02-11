@@ -3,7 +3,7 @@ import type { Scene } from '@/types/project';
 // USD単価
 const COST_PER_SEC = {
   sora_480p: 0.02,
-  sora_720p: 0.04,
+  sora_720p: 0.10, // Sora 2
   sora_1080p: 0.10,
   veo: 0.75,
   veo_fast: 0.40,

@@ -2,6 +2,26 @@ export type WorkflowStep = 'blueprint' | 'imageboard' | 'script' | 'generate' | 
 
 export type VideoApiPreference = 'auto' | 'sora' | 'veo';
 
+export interface ImageStyleGuide {
+  styleBible: string;
+  colorPalette: string;
+  lightingMood: string;
+  cameraLanguage: string;
+  negativePrompt: string;
+}
+
+export interface CharacterProfile {
+  id: string;
+  name: string;
+  role: string;
+  ethnicityNationality: string;
+  ageAppearance: string;
+  genderPresentation: string;
+  appearanceTraits: string;
+  wardrobe: string;
+  mustKeep: string;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -9,6 +29,8 @@ export interface Project {
   totalDurationSec: number;
   currentStep: WorkflowStep;
   videoApiPreference: VideoApiPreference;
+  imageStyleGuide: ImageStyleGuide;
+  characterBible: CharacterProfile[];
   scenes: Scene[];
   createdAt: string;
   updatedAt: string;
@@ -22,6 +44,7 @@ export interface Scene {
   durationSec: number;
   styleDirection: string;
   videoApi: 'sora' | 'veo';
+  castCharacterIds: string[];
   // イメージボード
   images: SceneImage[];
   selectedImageId: string | null;

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import type { Project, Scene, VideoGeneration } from '@/types/project';
 import { formatCost, estimateSceneCost } from '@/lib/cost-calculator';
+import { ProjectStepNav } from '../_components/project-step-nav';
 
 export default function GeneratePage() {
   const params = useParams();
@@ -252,6 +253,12 @@ export default function GeneratePage() {
         プロジェクトに戻る
       </a>
 
+      <div className="min-[1000px]:grid min-[1000px]:grid-cols-[220px_minmax(0,1fr)] min-[1000px]:gap-6 items-start">
+        <aside className="hidden min-[1000px]:block min-[1000px]:sticky min-[1000px]:top-20">
+          <ProjectStepNav project={project} projectId={projectId} />
+        </aside>
+
+        <div className="min-w-0">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">動画生成</h1>
         {hasUngeneratedScenes && (
@@ -435,6 +442,8 @@ export default function GeneratePage() {
         >
           完了へ →
         </button>
+      </div>
+        </div>
       </div>
     </div>
   );

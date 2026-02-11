@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import type { Project, Scene, VideoApiPreference } from '@/types/project';
 import { estimateProjectCost, formatCost, estimateSceneCost } from '@/lib/cost-calculator';
+import { ProjectStepNav } from '../_components/project-step-nav';
 
 export default function BlueprintPage() {
   const params = useParams();
@@ -92,6 +93,7 @@ export default function BlueprintPage() {
       durationSec: 8,
       styleDirection: '',
       videoApi: 'sora',
+      castCharacterIds: [],
       images: [],
       selectedImageId: null,
       useAsVideoInput: false,
@@ -151,6 +153,12 @@ export default function BlueprintPage() {
         プロジェクトに戻る
       </a>
 
+      <div className="min-[1000px]:grid min-[1000px]:grid-cols-[220px_minmax(0,1fr)] min-[1000px]:gap-6 items-start">
+        <aside className="hidden min-[1000px]:block min-[1000px]:sticky min-[1000px]:top-20">
+          <ProjectStepNav project={project} projectId={projectId} />
+        </aside>
+
+        <div className="min-w-0">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold">設計図</h1>
@@ -365,6 +373,8 @@ export default function BlueprintPage() {
           </div>
         </>
       )}
+        </div>
+      </div>
     </div>
   );
 }

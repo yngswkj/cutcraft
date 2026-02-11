@@ -4,31 +4,41 @@ import { v4 as uuidv4 } from 'uuid';
 import { GoogleGenAI, type GenerateVideosOperation } from '@google/genai';
 import type { VideoGeneration, VideoStatus } from '@/types/project';
 import { getProjectDir } from './file-storage';
+import { getEffectiveSettings } from './settings';
 
 // ===== Sora (OpenAI) =====
 const OPENAI_API_BASE = 'https://api.openai.com/v1';
 const SAFE_IMAGE_PATH_REGEX = /^images\/[A-Za-z0-9._-]+$/;
 
-function getOpenAIKey(): string {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) throw new Error('OPENAI_API_KEY が設定されていません');
+async function getOpenAIKey(): Promise<string> {
+  const settings = await getEffectiveSettings();
+  const key = settings.apiKeys.openaiApiKey;
+  if (!key) {
+    throw new Error('OPENAI_API_KEY が設定されていません（設定画面または .env.local）');
+  }
   return key;
 }
 
-function getGeminiClient(): GoogleGenAI {
-  const key = process.env.GOOGLE_AI_API_KEY;
-  if (!key) throw new Error('GOOGLE_AI_API_KEY が設定されていません');
+async function getGeminiClient(): Promise<GoogleGenAI> {
+  const settings = await getEffectiveSettings();
+  const key = settings.apiKeys.googleAiApiKey;
+  if (!key) {
+    throw new Error('GOOGLE_AI_API_KEY が設定されていません（設定画面または .env.local）');
+  }
   return new GoogleGenAI({ apiKey: key });
 }
 
 async function soraRequest(endpoint: string, options?: RequestInit) {
+  const openAIKey = await getOpenAIKey();
+  const headers = new Headers(options?.headers || {});
+  headers.set('Authorization', `Bearer ${openAIKey}`);
+  if (!headers.has('Content-Type') && options?.body && !(options.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
+  }
+
   const res = await fetch(`${OPENAI_API_BASE}${endpoint}`, {
     ...options,
-    headers: {
-      'Authorization': `Bearer ${getOpenAIKey()}`,
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
+    headers,
   });
   if (!res.ok) {
     const body = await res.text();
@@ -38,7 +48,7 @@ async function soraRequest(endpoint: string, options?: RequestInit) {
 }
 
 function nearestSoraDuration(sec: number): number {
-  const options = [5, 10, 15, 20];
+  const options = [4, 8, 12];
   return options.reduce((prev, curr) =>
     Math.abs(curr - sec) < Math.abs(prev - sec) ? curr : prev
   );
@@ -47,6 +57,13 @@ function nearestSoraDuration(sec: number): number {
 function nearestVeoDuration(sec: number): number {
   if (sec <= 5) return 5;
   return Math.min(sec, 8);
+}
+
+function getSoraCostPerSec(modelName: string): number {
+  const normalized = modelName.trim().toLowerCase();
+  if (normalized === 'sora-2-pro') return 0.30;
+  if (normalized === 'sora-2') return 0.10;
+  return 0.10;
 }
 
 function resolveProjectImagePath(projectId: string, imagePath: string): string {
@@ -99,39 +116,31 @@ async function startSoraGeneration(
   id: string,
   params: GenerateVideoParams
 ): Promise<VideoGeneration> {
+  const settings = await getEffectiveSettings();
   const duration = nearestSoraDuration(params.durationSec);
 
-  const input: Record<string, unknown>[] = [
-    { type: 'text', text: params.prompt },
-  ];
+  const formData = new FormData();
+  formData.append('model', settings.models.soraModel);
+  formData.append('prompt', params.prompt);
+  formData.append('seconds', String(duration));
+  formData.append('size', '1280x720');
 
   if (params.inputImagePath) {
     const absPath = resolveProjectImagePath(params.projectId, params.inputImagePath);
     const imageData = await fs.readFile(absPath);
-    const base64 = imageData.toString('base64');
     const mimeType = getImageMimeType(absPath);
-    input.push({
-      type: 'image_url',
-      image_url: {
-        url: `data:${mimeType};base64,${base64}`,
-      },
-    });
+    const blob = new Blob([imageData], { type: mimeType });
+    formData.append('input_reference', blob, path.basename(absPath));
   }
 
-  const res = await soraRequest('/videos/generations', {
+  const res = await soraRequest('/videos', {
     method: 'POST',
-    body: JSON.stringify({
-      model: 'sora',
-      input,
-      duration,
-      aspect_ratio: '16:9',
-      n: 1,
-    }),
+    body: formData,
   });
 
   const data = await res.json();
 
-  const costPerSec = 0.04;
+  const costPerSec = getSoraCostPerSec(settings.models.soraModel);
   return {
     id,
     sceneId: params.sceneId,
@@ -157,8 +166,9 @@ async function startVeoGeneration(
   id: string,
   params: GenerateVideoParams
 ): Promise<VideoGeneration> {
+  const settings = await getEffectiveSettings();
   const duration = nearestVeoDuration(params.durationSec);
-  const ai = getGeminiClient();
+  const ai = await getGeminiClient();
 
   const config: Record<string, unknown> = {
     numberOfVideos: 1,
@@ -179,7 +189,7 @@ async function startVeoGeneration(
   }
 
   const operation = await ai.models.generateVideos({
-    model: 'veo-2',
+    model: settings.models.veoModel,
     prompt: params.prompt,
     config,
   });
@@ -217,14 +227,14 @@ export async function checkVideoStatus(
 
 async function checkSoraStatus(generation: VideoGeneration): Promise<VideoGeneration> {
   try {
-    const res = await soraRequest(`/videos/generations/${generation.externalJobId}`, {
+    const res = await soraRequest(`/videos/${generation.externalJobId}`, {
       method: 'GET',
     });
     const data = await res.json();
 
     if (data.status === 'completed') {
       return { ...generation, status: 'completed', completedAt: new Date().toISOString() };
-    } else if (data.status === 'failed') {
+    } else if (data.status === 'failed' || data.status === 'cancelled') {
       return { ...generation, status: 'failed' };
     }
     return { ...generation, status: 'processing' };
@@ -235,7 +245,7 @@ async function checkSoraStatus(generation: VideoGeneration): Promise<VideoGenera
 
 async function checkVeoStatus(generation: VideoGeneration): Promise<VideoGeneration> {
   try {
-    const ai = getGeminiClient();
+    const ai = await getGeminiClient();
     const operationRef = { name: generation.externalJobId } as GenerateVideosOperation;
     const operation = await ai.operations.getVideosOperation({ operation: operationRef });
 
@@ -275,26 +285,16 @@ export async function downloadVideo(
 }
 
 async function downloadSoraVideo(generation: VideoGeneration, filePath: string): Promise<void> {
-  const res = await soraRequest(`/videos/generations/${generation.externalJobId}`, {
+  const res = await soraRequest(`/videos/${generation.externalJobId}/content`, {
     method: 'GET',
   });
-  const data = await res.json();
 
-  const videoUrl = data.data?.[0]?.url || data.url;
-  if (!videoUrl) {
-    throw new Error('動画URLが取得できませんでした');
-  }
-
-  const videoRes = await fetch(videoUrl);
-  if (!videoRes.ok) {
-    throw new Error(`動画ダウンロードに失敗しました (${videoRes.status})`);
-  }
-  const buffer = Buffer.from(await videoRes.arrayBuffer());
+  const buffer = Buffer.from(await res.arrayBuffer());
   await fs.writeFile(filePath, buffer);
 }
 
 async function downloadVeoVideo(generation: VideoGeneration, filePath: string): Promise<void> {
-  const ai = getGeminiClient();
+  const ai = await getGeminiClient();
   const operationRef = { name: generation.externalJobId } as GenerateVideosOperation;
   const operation = await ai.operations.getVideosOperation({ operation: operationRef });
 
