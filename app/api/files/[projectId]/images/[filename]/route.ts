@@ -3,12 +3,17 @@ import fs from 'fs/promises';
 import path from 'path';
 import { getProjectDir } from '@/lib/file-storage';
 
+const SAFE_PROJECT_ID_REGEX = /^[A-Za-z0-9-]+$/;
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ projectId: string; filename: string }> },
 ) {
   try {
     const { projectId, filename } = await params;
+    if (!SAFE_PROJECT_ID_REGEX.test(projectId)) {
+      return NextResponse.json({ error: '不正なprojectIdです' }, { status: 400 });
+    }
     if (!/^[A-Za-z0-9._-]+$/.test(filename)) {
       return NextResponse.json({ error: '不正なファイル名です' }, { status: 400 });
     }

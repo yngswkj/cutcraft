@@ -6,6 +6,8 @@ import { getProject, updateProject } from '@/lib/project-store';
 import { ensureProjectDir, saveFile, getProjectDir } from '@/lib/file-storage';
 import type { SceneImage } from '@/types/project';
 
+const SAFE_ID_REGEX = /^[A-Za-z0-9-]+$/;
+
 export async function POST(req: NextRequest) {
   try {
     const { projectId, sceneId, prompt } = await req.json();
@@ -13,6 +15,12 @@ export async function POST(req: NextRequest) {
     if (!projectId || !sceneId || !prompt) {
       return NextResponse.json(
         { error: '必須パラメータが不足しています' },
+        { status: 400 },
+      );
+    }
+    if (!SAFE_ID_REGEX.test(projectId) || !SAFE_ID_REGEX.test(sceneId)) {
+      return NextResponse.json(
+        { error: '不正なパラメータです' },
         { status: 400 },
       );
     }

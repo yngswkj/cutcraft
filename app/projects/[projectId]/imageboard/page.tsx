@@ -19,16 +19,26 @@ export default function ImageboardPage() {
   const projectId = params.projectId as string;
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [expandedScenes, setExpandedScenes] = useState<Set<string>>(new Set());
   const [generatingScenes, setGeneratingScenes] = useState<Set<string>>(new Set());
   const [prompts, setPrompts] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    fetch(`/api/projects/${projectId}`)
-      .then(res => res.json())
-      .then(data => {
+    let cancelled = false;
+
+    const loadProject = async () => {
+      try {
+        const res = await fetch(`/api/projects/${projectId}`);
+        if (!res.ok) {
+          throw new Error('プロジェクトの取得に失敗しました');
+        }
+
+        const data = await res.json();
+        if (cancelled) return;
+
         setProject(data);
-        setLoading(false);
+        setError(null);
         // デフォルトで全シーン展開
         setExpandedScenes(new Set(data.scenes.map((s: Scene) => s.id)));
         // 各シーンのプロンプト初期値設定
@@ -37,7 +47,19 @@ export default function ImageboardPage() {
           initialPrompts[s.id] = s.description || '';
         });
         setPrompts(initialPrompts);
-      });
+      } catch {
+        if (cancelled) return;
+        setProject(null);
+        setError('プロジェクトを読み込めませんでした');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    loadProject();
+    return () => {
+      cancelled = true;
+    };
   }, [projectId]);
 
   const toggleScene = (sceneId: string) => {
@@ -178,10 +200,18 @@ export default function ImageboardPage() {
     }
   };
 
-  if (loading || !project) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin h-8 w-8 border-4 border-primary-500 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className="text-center py-16 text-sm text-red-500">
+        {error || 'プロジェクトを読み込めませんでした'}
       </div>
     );
   }

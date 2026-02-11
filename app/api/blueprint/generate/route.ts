@@ -2,9 +2,15 @@ import { NextResponse } from 'next/server';
 import { getProject, updateProject, createSceneFromBlueprint } from '@/lib/project-store';
 import { generateBlueprint } from '@/lib/openai';
 
+const SAFE_PROJECT_ID_REGEX = /^[A-Za-z0-9-]+$/;
+
 export async function POST(request: Request) {
   const body = await request.json();
   const { projectId } = body as { projectId: string };
+
+  if (!SAFE_PROJECT_ID_REGEX.test(projectId)) {
+    return NextResponse.json({ error: '不正なprojectIdです' }, { status: 400 });
+  }
 
   const project = await getProject(projectId);
   if (!project) {

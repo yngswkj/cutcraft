@@ -11,6 +11,7 @@ import {
   ChevronUp,
   ImageIcon,
   Video,
+  Zap,
 } from 'lucide-react';
 import type { Project, Scene } from '@/types/project';
 
@@ -19,19 +20,42 @@ export default function ScriptPage() {
   const projectId = params.projectId as string;
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [expandedScenes, setExpandedScenes] = useState<Set<string>>(new Set());
   const [generatingScenes, setGeneratingScenes] = useState<Set<string>>(new Set());
+  const [bulkGenerating, setBulkGenerating] = useState(false);
   const [editingScenes, setEditingScenes] = useState<Record<string, Scene>>({});
 
   useEffect(() => {
-    fetch(`/api/projects/${projectId}`)
-      .then(res => res.json())
-      .then(data => {
+    let cancelled = false;
+
+    const loadProject = async () => {
+      try {
+        const res = await fetch(`/api/projects/${projectId}`);
+        if (!res.ok) {
+          throw new Error('プロジェクトの取得に失敗しました');
+        }
+
+        const data = await res.json();
+        if (cancelled) return;
+
         setProject(data);
-        setLoading(false);
+        setError(null);
         // デフォルトで全シーン展開
         setExpandedScenes(new Set(data.scenes.map((s: Scene) => s.id)));
-      });
+      } catch {
+        if (cancelled) return;
+        setProject(null);
+        setError('プロジェクトを読み込めませんでした');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    loadProject();
+    return () => {
+      cancelled = true;
+    };
   }, [projectId]);
 
   const toggleScene = (sceneId: string) => {
@@ -84,6 +108,45 @@ export default function ScriptPage() {
         return next;
       });
     }
+  };
+
+  const generateAllScripts = async () => {
+    if (!project) return;
+    setBulkGenerating(true);
+    for (const scene of project.scenes) {
+      if (scene.videoPrompt.trim().length > 0) continue;
+      setGeneratingScenes(prev => new Set(prev).add(scene.id));
+      try {
+        const res = await fetch('/api/scripts/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId, sceneId: scene.id }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setProject(prev => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              scenes: prev.scenes.map(s =>
+                s.id === scene.id
+                  ? { ...s, videoPrompt: data.videoPrompt, promptMetadata: data.metadata }
+                  : s
+              ),
+            };
+          });
+        }
+      } catch {
+        // 個別エラーはスキップ
+      } finally {
+        setGeneratingScenes(prev => {
+          const next = new Set(prev);
+          next.delete(scene.id);
+          return next;
+        });
+      }
+    }
+    setBulkGenerating(false);
   };
 
   const startEdit = (scene: Scene) => {
@@ -161,10 +224,18 @@ export default function ScriptPage() {
     }
   };
 
-  if (loading || !project) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin h-8 w-8 border-4 border-primary-500 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className="text-center py-16 text-sm text-red-500">
+        {error || 'プロジェクトを読み込めませんでした'}
       </div>
     );
   }
@@ -188,6 +259,16 @@ export default function ScriptPage() {
             各シーンの動画生成プロンプトを作成しましょう
           </p>
         </div>
+        {project.scenes.some(s => !s.videoPrompt.trim()) && (
+          <button
+            onClick={generateAllScripts}
+            disabled={bulkGenerating}
+            className="flex items-center gap-2 bg-primary-600 text-white px-5 py-2.5 rounded-lg hover:bg-primary-700 transition disabled:opacity-50"
+          >
+            <Zap size={18} />
+            {bulkGenerating ? '一括生成中...' : '未作成の台本を一括生成'}
+          </button>
+        )}
       </div>
 
       <div className="space-y-4 mb-6">

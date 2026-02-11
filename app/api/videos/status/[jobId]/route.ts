@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getProject, updateProject } from '@/lib/project-store';
 import { checkVideoStatus, downloadVideo } from '@/lib/video-service';
 
+const SAFE_ID_REGEX = /^[A-Za-z0-9-]+$/;
+
 export async function GET(
   request: Request,
   { params }: { params: { jobId: string } }
@@ -12,6 +14,9 @@ export async function GET(
 
   if (!projectId || !sceneId) {
     return NextResponse.json({ error: 'projectIdとsceneIdが必要です' }, { status: 400 });
+  }
+  if (!SAFE_ID_REGEX.test(projectId) || !SAFE_ID_REGEX.test(sceneId) || !SAFE_ID_REGEX.test(params.jobId)) {
+    return NextResponse.json({ error: '不正なパラメータです' }, { status: 400 });
   }
 
   const project = await getProject(projectId);
@@ -37,8 +42,8 @@ export async function GET(
       try {
         const localPath = await downloadVideo(updated, projectId);
         updated.localPath = localPath;
-      } catch {
-        // ダウンロード失敗は致命的ではない
+      } catch (error) {
+        console.error('Video download error:', error);
       }
     }
 

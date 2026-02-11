@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateVideoScript } from '@/lib/openai';
 import { getProject, updateProject } from '@/lib/project-store';
 
+const SAFE_ID_REGEX = /^[A-Za-z0-9-]+$/;
+
 export async function POST(req: NextRequest) {
   try {
     const { projectId, sceneId } = await req.json();
@@ -9,6 +11,12 @@ export async function POST(req: NextRequest) {
     if (!projectId || !sceneId) {
       return NextResponse.json(
         { error: '必須パラメータが不足しています' },
+        { status: 400 },
+      );
+    }
+    if (!SAFE_ID_REGEX.test(projectId) || !SAFE_ID_REGEX.test(sceneId)) {
+      return NextResponse.json(
+        { error: '不正なパラメータです' },
         { status: 400 },
       );
     }

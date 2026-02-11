@@ -1,22 +1,31 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { GoogleGenAI, type GenerateVideosOperation } from '@google/genai';
 import type { VideoGeneration, VideoStatus } from '@/types/project';
 import { getProjectDir } from './file-storage';
 
+// ===== Sora (OpenAI) =====
 const OPENAI_API_BASE = 'https://api.openai.com/v1';
+const SAFE_IMAGE_PATH_REGEX = /^images\/[A-Za-z0-9._-]+$/;
 
-function getApiKey(): string {
+function getOpenAIKey(): string {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new Error('OPENAI_API_KEY が設定されていません');
   return key;
+}
+
+function getGeminiClient(): GoogleGenAI {
+  const key = process.env.GOOGLE_AI_API_KEY;
+  if (!key) throw new Error('GOOGLE_AI_API_KEY が設定されていません');
+  return new GoogleGenAI({ apiKey: key });
 }
 
 async function soraRequest(endpoint: string, options?: RequestInit) {
   const res = await fetch(`${OPENAI_API_BASE}${endpoint}`, {
     ...options,
     headers: {
-      'Authorization': `Bearer ${getApiKey()}`,
+      'Authorization': `Bearer ${getOpenAIKey()}`,
       'Content-Type': 'application/json',
       ...options?.headers,
     },
@@ -28,13 +37,42 @@ async function soraRequest(endpoint: string, options?: RequestInit) {
   return res;
 }
 
-// Soraの対応秒数に丸める
 function nearestSoraDuration(sec: number): number {
   const options = [5, 10, 15, 20];
   return options.reduce((prev, curr) =>
     Math.abs(curr - sec) < Math.abs(prev - sec) ? curr : prev
   );
 }
+
+function nearestVeoDuration(sec: number): number {
+  if (sec <= 5) return 5;
+  return Math.min(sec, 8);
+}
+
+function resolveProjectImagePath(projectId: string, imagePath: string): string {
+  if (!SAFE_IMAGE_PATH_REGEX.test(imagePath)) {
+    throw new Error('不正な入力画像パスです');
+  }
+
+  const projectDir = path.resolve(getProjectDir(projectId));
+  const imagesDir = path.resolve(projectDir, 'images');
+  const absPath = path.resolve(projectDir, imagePath);
+
+  if (!absPath.startsWith(`${imagesDir}${path.sep}`)) {
+    throw new Error('入力画像パスが不正です');
+  }
+
+  return absPath;
+}
+
+function getImageMimeType(imagePath: string): 'image/png' | 'image/jpeg' {
+  const ext = path.extname(imagePath).toLowerCase();
+  if (ext === '.png') return 'image/png';
+  if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg';
+  throw new Error('未対応の画像形式です');
+}
+
+// ===== 共通インターフェース =====
 
 export interface GenerateVideoParams {
   projectId: string;
@@ -52,9 +90,10 @@ export async function startVideoGeneration(params: GenerateVideoParams): Promise
   if (params.api === 'sora') {
     return await startSoraGeneration(id, params);
   }
-  // Veo対応は Phase 3 で実装
-  throw new Error('Veo APIは未実装です。Phase 3で対応予定。');
+  return await startVeoGeneration(id, params);
 }
+
+// ===== Sora 生成 =====
 
 async function startSoraGeneration(
   id: string,
@@ -66,13 +105,11 @@ async function startSoraGeneration(
     { type: 'text', text: params.prompt },
   ];
 
-  // image-to-video: 入力画像がある場合
   if (params.inputImagePath) {
-    const normalized = path.normalize(params.inputImagePath).replace(/^([/\\])+/, '');
-    const absPath = path.join(getProjectDir(params.projectId), normalized);
+    const absPath = resolveProjectImagePath(params.projectId, params.inputImagePath);
     const imageData = await fs.readFile(absPath);
     const base64 = imageData.toString('base64');
-    const mimeType = normalized.endsWith('.png') ? 'image/png' : 'image/jpeg';
+    const mimeType = getImageMimeType(absPath);
     input.push({
       type: 'image_url',
       image_url: {
@@ -94,7 +131,7 @@ async function startSoraGeneration(
 
   const data = await res.json();
 
-  const costPerSec = 0.04; // 720p
+  const costPerSec = 0.04;
   return {
     id,
     sceneId: params.sceneId,
@@ -114,13 +151,71 @@ async function startSoraGeneration(
   };
 }
 
+// ===== Veo 生成 =====
+
+async function startVeoGeneration(
+  id: string,
+  params: GenerateVideoParams
+): Promise<VideoGeneration> {
+  const duration = nearestVeoDuration(params.durationSec);
+  const ai = getGeminiClient();
+
+  const config: Record<string, unknown> = {
+    numberOfVideos: 1,
+    durationSeconds: duration,
+    aspectRatio: '16:9',
+  };
+
+  // image-to-video: 入力画像がある場合
+  if (params.inputImagePath) {
+    const absPath = resolveProjectImagePath(params.projectId, params.inputImagePath);
+    const imageData = await fs.readFile(absPath);
+    const base64 = imageData.toString('base64');
+    const mimeType = getImageMimeType(absPath);
+    config.image = {
+      imageBytes: base64,
+      mimeType,
+    };
+  }
+
+  const operation = await ai.models.generateVideos({
+    model: 'veo-2',
+    prompt: params.prompt,
+    config,
+  });
+
+  const costPerSec = 0.75;
+  return {
+    id,
+    sceneId: params.sceneId,
+    version: params.version,
+    api: 'veo',
+    externalJobId: operation.name || '',
+    status: 'processing' as VideoStatus,
+    prompt: params.prompt,
+    inputImagePath: params.inputImagePath || null,
+    chainedFramePath: null,
+    localPath: null,
+    durationSec: duration,
+    resolution: '1920x1080',
+    estimatedCost: duration * costPerSec,
+    createdAt: new Date().toISOString(),
+    completedAt: null,
+  };
+}
+
+// ===== ステータス確認 =====
+
 export async function checkVideoStatus(
   generation: VideoGeneration
 ): Promise<VideoGeneration> {
-  if (generation.api !== 'sora') {
-    return generation;
+  if (generation.api === 'sora') {
+    return checkSoraStatus(generation);
   }
+  return checkVeoStatus(generation);
+}
 
+async function checkSoraStatus(generation: VideoGeneration): Promise<VideoGeneration> {
   try {
     const res = await soraRequest(`/videos/generations/${generation.externalJobId}`, {
       method: 'GET',
@@ -138,33 +233,153 @@ export async function checkVideoStatus(
   }
 }
 
+async function checkVeoStatus(generation: VideoGeneration): Promise<VideoGeneration> {
+  try {
+    const ai = getGeminiClient();
+    const operationRef = { name: generation.externalJobId } as GenerateVideosOperation;
+    const operation = await ai.operations.getVideosOperation({ operation: operationRef });
+
+    if (operation.done) {
+      const hasError = Boolean((operation as { error?: unknown }).error);
+      const generatedVideos = operation.response?.generatedVideos;
+      const hasVideos = Array.isArray(generatedVideos) && generatedVideos.length > 0;
+      if (hasError || !hasVideos) {
+        return { ...generation, status: 'failed', completedAt: new Date().toISOString() };
+      }
+      return { ...generation, status: 'completed', completedAt: new Date().toISOString() };
+    }
+    return { ...generation, status: 'processing' };
+  } catch {
+    return generation;
+  }
+}
+
+// ===== 動画ダウンロード =====
+
 export async function downloadVideo(
   generation: VideoGeneration,
   projectId: string
 ): Promise<string> {
-  if (generation.api !== 'sora') {
-    throw new Error('Veo APIは未実装です');
+  const videoDir = path.join(getProjectDir(projectId), 'videos');
+  await fs.mkdir(videoDir, { recursive: true });
+  const filename = `${generation.sceneId}_v${generation.version}.mp4`;
+  const filePath = path.join(videoDir, filename);
+
+  if (generation.api === 'sora') {
+    await downloadSoraVideo(generation, filePath);
+  } else {
+    await downloadVeoVideo(generation, filePath);
   }
 
+  return `/api/files/${projectId}/videos/${filename}`;
+}
+
+async function downloadSoraVideo(generation: VideoGeneration, filePath: string): Promise<void> {
   const res = await soraRequest(`/videos/generations/${generation.externalJobId}`, {
     method: 'GET',
   });
   const data = await res.json();
 
-  // 動画URLを取得してダウンロード
   const videoUrl = data.data?.[0]?.url || data.url;
   if (!videoUrl) {
     throw new Error('動画URLが取得できませんでした');
   }
 
   const videoRes = await fetch(videoUrl);
+  if (!videoRes.ok) {
+    throw new Error(`動画ダウンロードに失敗しました (${videoRes.status})`);
+  }
   const buffer = Buffer.from(await videoRes.arrayBuffer());
-
-  const videoDir = path.join(getProjectDir(projectId), 'videos');
-  await fs.mkdir(videoDir, { recursive: true });
-  const filename = `${generation.sceneId}_v${generation.version}.mp4`;
-  const filePath = path.join(videoDir, filename);
   await fs.writeFile(filePath, buffer);
+}
 
-  return `/api/files/${projectId}/videos/${filename}`;
+async function downloadVeoVideo(generation: VideoGeneration, filePath: string): Promise<void> {
+  const ai = getGeminiClient();
+  const operationRef = { name: generation.externalJobId } as GenerateVideosOperation;
+  const operation = await ai.operations.getVideosOperation({ operation: operationRef });
+
+  if (!operation.done) {
+    throw new Error('動画生成がまだ完了していません');
+  }
+
+  if (!operation.response) {
+    throw new Error('Veo APIからのレスポンスが空です');
+  }
+
+  const videos = operation.response.generatedVideos;
+  if (!videos || videos.length === 0) {
+    throw new Error('生成された動画が見つかりません');
+  }
+
+  const video = videos[0].video;
+  if (!video) {
+    throw new Error('動画データが取得できませんでした');
+  }
+
+  if (video.uri) {
+    const videoRes = await fetch(video.uri);
+    if (!videoRes.ok) {
+      throw new Error(`動画ダウンロードに失敗しました (${videoRes.status})`);
+    }
+    const buffer = Buffer.from(await videoRes.arrayBuffer());
+    await fs.writeFile(filePath, buffer);
+  } else if (video.videoBytes) {
+    const buffer = Buffer.from(video.videoBytes, 'base64');
+    await fs.writeFile(filePath, buffer);
+  } else {
+    throw new Error('動画データが取得できませんでした');
+  }
+}
+
+// ===== シーンチェーン: 最終フレーム抽出 =====
+
+export async function extractLastFrame(
+  videoPath: string,
+  outputPath: string,
+): Promise<void> {
+  const { spawn } = await import('child_process');
+
+  await new Promise<void>((resolve, reject) => {
+    const ffmpeg = spawn(
+      'ffmpeg',
+      ['-sseof', '-1', '-i', videoPath, '-frames:v', '1', '-update', '1', '-y', outputPath],
+      { windowsHide: true },
+    );
+
+    let stderr = '';
+    ffmpeg.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    ffmpeg.on('error', reject);
+    ffmpeg.on('close', (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(`ffmpeg execution failed (${code}): ${stderr.trim()}`));
+    });
+  });
+}
+
+export async function getChainedFramePath(
+  projectId: string,
+  previousSceneId: string,
+  previousVersion: number,
+): Promise<string | null> {
+  const videoDir = path.join(getProjectDir(projectId), 'videos');
+  const videoFilename = `${previousSceneId}_v${previousVersion}.mp4`;
+  const videoPath = path.join(videoDir, videoFilename);
+
+  try {
+    await fs.access(videoPath);
+  } catch {
+    return null;
+  }
+
+  const frameFilename = `${previousSceneId}_v${previousVersion}_lastframe.png`;
+  const framePath = path.join(getProjectDir(projectId), 'images', frameFilename);
+
+  await extractLastFrame(videoPath, framePath);
+
+  return `images/${frameFilename}`;
 }
