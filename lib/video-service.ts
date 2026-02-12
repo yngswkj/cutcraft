@@ -89,6 +89,81 @@ function getImageMimeType(imagePath: string): 'image/png' | 'image/jpeg' {
   throw new Error('未対応の画像形式です');
 }
 
+function parsePngDimensions(imageData: Buffer): { width: number; height: number } {
+  const pngSignature = '89504e470d0a1a0a';
+  if (imageData.length < 24 || imageData.subarray(0, 8).toString('hex') !== pngSignature) {
+    throw new Error('PNG画像の解析に失敗しました');
+  }
+
+  const width = imageData.readUInt32BE(16);
+  const height = imageData.readUInt32BE(20);
+
+  if (width <= 0 || height <= 0) {
+    throw new Error('PNG画像のサイズが不正です');
+  }
+
+  return { width, height };
+}
+
+function parseJpegDimensions(imageData: Buffer): { width: number; height: number } {
+  if (imageData.length < 4 || imageData[0] !== 0xff || imageData[1] !== 0xd8) {
+    throw new Error('JPEG画像の解析に失敗しました');
+  }
+
+  let offset = 2;
+  while (offset + 9 < imageData.length) {
+    if (imageData[offset] !== 0xff) {
+      offset += 1;
+      continue;
+    }
+
+    const marker = imageData[offset + 1];
+    offset += 2;
+
+    if (marker === 0xd8 || marker === 0xd9) {
+      continue;
+    }
+
+    if (offset + 2 > imageData.length) break;
+    const segmentLength = imageData.readUInt16BE(offset);
+
+    if (segmentLength < 2 || offset + segmentLength > imageData.length) {
+      break;
+    }
+
+    const isStartOfFrame =
+      (marker >= 0xc0 && marker <= 0xc3) ||
+      (marker >= 0xc5 && marker <= 0xc7) ||
+      (marker >= 0xc9 && marker <= 0xcb) ||
+      (marker >= 0xcd && marker <= 0xcf);
+
+    if (isStartOfFrame) {
+      if (segmentLength < 7) break;
+      const height = imageData.readUInt16BE(offset + 3);
+      const width = imageData.readUInt16BE(offset + 5);
+
+      if (width <= 0 || height <= 0) {
+        throw new Error('JPEG画像のサイズが不正です');
+      }
+      return { width, height };
+    }
+
+    offset += segmentLength;
+  }
+
+  throw new Error('JPEG画像のサイズを取得できませんでした');
+}
+
+function getImageDimensions(
+  imageData: Buffer,
+  mimeType: 'image/png' | 'image/jpeg'
+): { width: number; height: number } {
+  if (mimeType === 'image/png') {
+    return parsePngDimensions(imageData);
+  }
+  return parseJpegDimensions(imageData);
+}
+
 // ===== 共通インターフェース =====
 
 export interface GenerateVideoParams {
@@ -118,20 +193,25 @@ async function startSoraGeneration(
 ): Promise<VideoGeneration> {
   const settings = await getEffectiveSettings();
   const duration = nearestSoraDuration(params.durationSec);
+  let resolution = '1280x720';
 
   const formData = new FormData();
   formData.append('model', settings.models.soraModel);
   formData.append('prompt', params.prompt);
   formData.append('seconds', String(duration));
-  formData.append('size', '1280x720');
 
   if (params.inputImagePath) {
     const absPath = resolveProjectImagePath(params.projectId, params.inputImagePath);
     const imageData = await fs.readFile(absPath);
     const mimeType = getImageMimeType(absPath);
+    const dimensions = getImageDimensions(imageData, mimeType);
+    resolution = `${dimensions.width}x${dimensions.height}`;
+
     const blob = new Blob([imageData], { type: mimeType });
     formData.append('input_reference', blob, path.basename(absPath));
   }
+
+  formData.append('size', resolution);
 
   const res = await soraRequest('/videos', {
     method: 'POST',
@@ -153,7 +233,7 @@ async function startSoraGeneration(
     chainedFramePath: null,
     localPath: null,
     durationSec: duration,
-    resolution: '1280x720',
+    resolution,
     estimatedCost: duration * costPerSec,
     createdAt: new Date().toISOString(),
     completedAt: null,
