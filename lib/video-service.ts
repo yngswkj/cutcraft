@@ -10,6 +10,7 @@ import { getEffectiveSettings } from './settings';
 // ===== Sora (OpenAI) =====
 const OPENAI_API_BASE = 'https://api.openai.com/v1';
 const SAFE_IMAGE_PATH_REGEX = /^images\/[A-Za-z0-9._-]+$/;
+const SORA_MODERATION_MODEL = 'omni-moderation-latest';
 const SORA_SUPPORTED_RESOLUTIONS = [
   { label: '1280x720', width: 1280, height: 720 },
   { label: '1792x1024', width: 1792, height: 1024 },
@@ -17,6 +18,129 @@ const SORA_SUPPORTED_RESOLUTIONS = [
   { label: '1024x1792', width: 1024, height: 1792 },
 ] as const;
 type SoraResolution = (typeof SORA_SUPPORTED_RESOLUTIONS)[number];
+type SoraModerationResult = { flagged: boolean; reason: string | null };
+
+function toRecord(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function summarizeErrorDetail(detail: unknown): string | null {
+  if (detail instanceof Error) {
+    return detail.message.trim() || null;
+  }
+  if (typeof detail === 'string') {
+    const text = detail.trim();
+    return text.length > 0 ? text : null;
+  }
+  if (typeof detail === 'number' || typeof detail === 'boolean') {
+    return String(detail);
+  }
+  if (Array.isArray(detail)) {
+    for (const item of detail) {
+      const text = summarizeErrorDetail(item);
+      if (text) return text;
+    }
+    return null;
+  }
+
+  const record = toRecord(detail);
+  if (record) {
+    const candidates = [
+      record.message,
+      record.error,
+      record.reason,
+      record.failure_reason,
+      record.last_error,
+      record.detail,
+      record.details,
+      record.status_details,
+    ];
+    for (const candidate of candidates) {
+      const text = summarizeErrorDetail(candidate);
+      if (text) return text;
+    }
+  }
+
+  try {
+    return JSON.stringify(detail);
+  } catch {
+    return null;
+  }
+}
+
+function toFailedGeneration(generation: VideoGeneration, message: string): VideoGeneration {
+  return {
+    ...generation,
+    status: 'failed',
+    completedAt: generation.completedAt ?? new Date().toISOString(),
+    errorMessage: message.slice(0, 2000),
+  };
+}
+
+function isSoraModerationBlockedError(error: unknown): boolean {
+  const detail = summarizeErrorDetail(error)?.toLowerCase() || '';
+  return detail.includes('blocked by our moderation system')
+    || (detail.includes('moderation') && detail.includes('sora api error'));
+}
+
+function sanitizePromptForModeration(prompt: string): string {
+  const replacements: Array<[RegExp, string]> = [
+    [/\b(kill|killing|murder|assassinate|execute|slaughter)\b/gi, 'defeat'],
+    [/\b(blood|bloody|gore|gory|behead|dismember)\b/gi, 'dramatic'],
+    [/\b(nude|nudity|sexual|sex|explicit)\b/gi, 'safe'],
+    [/\b(terrorist|bomb|explosion attack)\b/gi, 'high tension'],
+    [/\b(suicide|self-harm)\b/gi, 'emotional struggle'],
+    [/殺す|殺害|流血|残虐|自殺|裸体|性的/gu, '安全な表現'],
+  ];
+
+  let sanitized = prompt;
+  for (const [pattern, replacement] of replacements) {
+    sanitized = sanitized.replace(pattern, replacement);
+  }
+
+  const safetyGuardrail = ' Keep the scene PG-13, non-graphic, non-sexual, and policy-compliant.';
+  if (!sanitized.toLowerCase().includes('policy-compliant')) {
+    sanitized += safetyGuardrail;
+  }
+  return sanitized;
+}
+
+async function runSoraTextModeration(prompt: string): Promise<SoraModerationResult> {
+  try {
+    const res = await soraRequest('/moderations', {
+      method: 'POST',
+      body: JSON.stringify({
+        model: SORA_MODERATION_MODEL,
+        input: prompt,
+      }),
+    });
+    const data = await res.json() as unknown;
+    const record = toRecord(data);
+    const results = Array.isArray(record?.results) ? record.results : [];
+    const first = results.length > 0 ? toRecord(results[0]) : null;
+    const flagged = first?.flagged === true;
+
+    if (!flagged) {
+      return { flagged: false, reason: null };
+    }
+
+    const categories = toRecord(first?.categories);
+    const categoryNames = categories
+      ? Object.entries(categories)
+        .filter(([, value]) => value === true)
+        .map(([key]) => key)
+      : [];
+    const reason = categoryNames.length > 0
+      ? `moderation categories: ${categoryNames.join(', ')}`
+      : 'flagged by moderation';
+
+    return { flagged: true, reason };
+  } catch {
+    // モデレーションAPI自体の障害で動画生成を止めない
+    return { flagged: false, reason: null };
+  }
+}
 
 async function getOpenAIKey(): Promise<string> {
   const settings = await getEffectiveSettings();
@@ -246,11 +370,9 @@ async function startSoraGeneration(
   const settings = await getEffectiveSettings();
   const duration = nearestSoraDuration(params.durationSec);
   let resolution = '1280x720';
-
-  const formData = new FormData();
-  formData.append('model', settings.models.soraModel);
-  formData.append('prompt', params.prompt);
-  formData.append('seconds', String(duration));
+  let uploadImageData: Buffer | null = null;
+  let uploadMimeType: 'image/png' | 'image/jpeg' | null = null;
+  let uploadFilename: string | null = null;
 
   if (params.inputImagePath) {
     const absPath = resolveProjectImagePath(params.projectId, params.inputImagePath);
@@ -263,25 +385,69 @@ async function startSoraGeneration(
     const requiresResize =
       dimensions.width !== targetResolution.width ||
       dimensions.height !== targetResolution.height;
-    const uploadImageData = requiresResize
+    uploadImageData = requiresResize
       ? await resizeImageForSora(sourceImageData, sourceMimeType, targetResolution)
       : sourceImageData;
-    const uploadMimeType = sourceMimeType;
-
-    const blob = new Blob([new Uint8Array(uploadImageData)], { type: uploadMimeType });
+    uploadMimeType = sourceMimeType;
     const parsedName = path.parse(absPath).name;
-    const uploadFilename = uploadMimeType === 'image/png' ? `${parsedName}.png` : `${parsedName}.jpg`;
-    formData.append('input_reference', blob, uploadFilename);
+    uploadFilename = uploadMimeType === 'image/png' ? `${parsedName}.png` : `${parsedName}.jpg`;
   }
+  const submitSoraRequest = async (prompt: string): Promise<Record<string, unknown>> => {
+    const formData = new FormData();
+    formData.append('model', settings.models.soraModel);
+    formData.append('prompt', prompt);
+    formData.append('seconds', String(duration));
+    formData.append('size', resolution);
 
-  formData.append('size', resolution);
+    if (uploadImageData && uploadMimeType && uploadFilename) {
+      const blob = new Blob([new Uint8Array(uploadImageData)], { type: uploadMimeType });
+      formData.append('input_reference', blob, uploadFilename);
+    }
 
-  const res = await soraRequest('/videos', {
-    method: 'POST',
-    body: formData,
-  });
+    const res = await soraRequest('/videos', {
+      method: 'POST',
+      body: formData,
+    });
+    return await res.json() as Record<string, unknown>;
+  };
 
-  const data = await res.json();
+  const moderation = await runSoraTextModeration(params.prompt);
+  let promptForRequest = moderation.flagged
+    ? sanitizePromptForModeration(params.prompt)
+    : params.prompt;
+
+  let data: Record<string, unknown>;
+  try {
+    data = await submitSoraRequest(promptForRequest);
+  } catch (error) {
+    if (!isSoraModerationBlockedError(error)) {
+      throw error;
+    }
+
+    const retriedPrompt = sanitizePromptForModeration(promptForRequest);
+    const canRetry = retriedPrompt !== promptForRequest;
+    if (!canRetry) {
+      if (params.inputImagePath) {
+        throw new Error(
+          'Soraのモデレーションによりブロックされました。入力画像またはプロンプトをより安全な内容に変更してください。'
+        );
+      }
+      throw error;
+    }
+
+    promptForRequest = retriedPrompt;
+    try {
+      data = await submitSoraRequest(promptForRequest);
+    } catch (retryError) {
+      if (isSoraModerationBlockedError(retryError) && params.inputImagePath) {
+        const moderationHint = moderation.reason ? ` (${moderation.reason})` : '';
+        throw new Error(
+          `Soraのモデレーションによりブロックされました${moderationHint}。入力画像またはプロンプトをより安全な内容に変更してください。`
+        );
+      }
+      throw retryError;
+    }
+  }
 
   const costPerSec = getSoraCostPerSec(settings.models.soraModel);
   return {
@@ -289,15 +455,16 @@ async function startSoraGeneration(
     sceneId: params.sceneId,
     version: params.version,
     api: 'sora',
-    externalJobId: data.id || '',
+    externalJobId: typeof data.id === 'string' ? data.id : '',
     status: 'processing' as VideoStatus,
-    prompt: params.prompt,
+    prompt: promptForRequest,
     inputImagePath: params.inputImagePath || null,
     chainedFramePath: null,
     localPath: null,
     durationSec: duration,
     resolution,
     estimatedCost: duration * costPerSec,
+    errorMessage: null,
     createdAt: new Date().toISOString(),
     completedAt: null,
   };
@@ -352,6 +519,7 @@ async function startVeoGeneration(
     durationSec: duration,
     resolution: '1920x1080',
     estimatedCost: duration * costPerSec,
+    errorMessage: null,
     createdAt: new Date().toISOString(),
     completedAt: null,
   };
@@ -373,16 +541,32 @@ async function checkSoraStatus(generation: VideoGeneration): Promise<VideoGenera
     const res = await soraRequest(`/videos/${generation.externalJobId}`, {
       method: 'GET',
     });
-    const data = await res.json();
+    const data = await res.json() as unknown;
+    const record = toRecord(data);
+    const status = typeof record?.status === 'string' ? record.status : '';
 
-    if (data.status === 'completed') {
-      return { ...generation, status: 'completed', completedAt: new Date().toISOString() };
-    } else if (data.status === 'failed' || data.status === 'cancelled') {
-      return { ...generation, status: 'failed' };
+    if (status === 'completed') {
+      return {
+        ...generation,
+        status: 'completed',
+        completedAt: new Date().toISOString(),
+        errorMessage: null,
+      };
     }
-    return { ...generation, status: 'processing' };
-  } catch {
-    return generation;
+
+    if (status === 'failed' || status === 'cancelled') {
+      const detail = summarizeErrorDetail(record) || `Soraジョブが${status}になりました`;
+      return toFailedGeneration(generation, detail);
+    }
+
+    if (status.length > 0) {
+      return { ...generation, status: 'processing', errorMessage: null };
+    }
+
+    return toFailedGeneration(generation, 'Soraステータスが取得できませんでした');
+  } catch (error) {
+    const detail = summarizeErrorDetail(error) || 'Soraステータス確認に失敗しました';
+    return toFailedGeneration(generation, detail);
   }
 }
 
@@ -397,13 +581,21 @@ async function checkVeoStatus(generation: VideoGeneration): Promise<VideoGenerat
       const generatedVideos = operation.response?.generatedVideos;
       const hasVideos = Array.isArray(generatedVideos) && generatedVideos.length > 0;
       if (hasError || !hasVideos) {
-        return { ...generation, status: 'failed', completedAt: new Date().toISOString() };
+        const detail = summarizeErrorDetail((operation as { error?: unknown }).error)
+          || 'Veoジョブが失敗しました';
+        return toFailedGeneration(generation, detail);
       }
-      return { ...generation, status: 'completed', completedAt: new Date().toISOString() };
+      return {
+        ...generation,
+        status: 'completed',
+        completedAt: new Date().toISOString(),
+        errorMessage: null,
+      };
     }
-    return { ...generation, status: 'processing' };
-  } catch {
-    return generation;
+    return { ...generation, status: 'processing', errorMessage: null };
+  } catch (error) {
+    const detail = summarizeErrorDetail(error) || 'Veoステータス確認に失敗しました';
+    return toFailedGeneration(generation, detail);
   }
 }
 

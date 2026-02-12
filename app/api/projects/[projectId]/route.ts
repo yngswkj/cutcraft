@@ -251,6 +251,14 @@ function parseVideoGeneration(value: unknown, sceneId: string, projectId: string
   const durationSec = parseNumber(value.durationSec, 1, 120);
   const resolution = parseString(value.resolution);
   const estimatedCost = parseNumber(value.estimatedCost, 0, 1000000);
+  let errorMessage: string | null;
+  if (value.errorMessage === null || value.errorMessage === undefined) {
+    errorMessage = null;
+  } else {
+    const parsed = parseString(value.errorMessage);
+    if (parsed === null) return null;
+    errorMessage = parsed;
+  }
   const createdAt = parseIsoDate(value.createdAt);
   let completedAt: string | null;
   if (value.completedAt === null) {
@@ -317,6 +325,7 @@ function parseVideoGeneration(value: unknown, sceneId: string, projectId: string
     durationSec,
     resolution,
     estimatedCost,
+    errorMessage,
     createdAt,
     completedAt,
   };

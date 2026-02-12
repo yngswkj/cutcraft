@@ -110,20 +110,33 @@ export default function GeneratePage() {
         const res = await fetch(
           `/api/videos/status/${generation.id}?projectId=${projectId}&sceneId=${sceneId}`
         );
-        if (res.ok) {
-          const data = await res.json();
-          const isReady =
-            data.generation.status === 'completed' && Boolean(data.generation.localPath);
-          const isFailed = data.generation.status === 'failed';
-
-          if (isReady || isFailed) {
-            clearInterval(pollingRef.current[generation.id]);
-            delete pollingRef.current[generation.id];
-            await fetchProject();
-          }
+        if (!res.ok) {
+          const body = await res.json().catch(() => null);
+          const message = body?.error || `ステータス確認に失敗しました (${res.status})`;
+          clearInterval(pollingRef.current[generation.id]);
+          delete pollingRef.current[generation.id];
+          setError(message);
+          await fetchProject();
+          return;
         }
-      } catch {
-        // ポーリングエラーは無視
+
+        const data = await res.json();
+        const isReady =
+          data.generation.status === 'completed' && Boolean(data.generation.localPath);
+        const isFailed = data.generation.status === 'failed';
+
+        if (isReady || isFailed) {
+          clearInterval(pollingRef.current[generation.id]);
+          delete pollingRef.current[generation.id];
+          await fetchProject();
+        }
+      } catch (pollingError) {
+        const message = pollingError instanceof Error
+          ? pollingError.message
+          : 'ステータス確認中に通信エラーが発生しました';
+        clearInterval(pollingRef.current[generation.id]);
+        delete pollingRef.current[generation.id];
+        setError(message);
       }
     }, 5000);
   };
@@ -407,6 +420,11 @@ export default function GeneratePage() {
                                 </div>
                               )}
                             </div>
+                            {gen.status === 'failed' && (
+                              <p className="mt-2 text-xs text-red-600 whitespace-pre-wrap break-all">
+                                原因: {gen.errorMessage || '詳細情報を取得できませんでした。再生成して再度ご確認ください。'}
+                              </p>
+                            )}
                           </div>
                           {/* 動画プレビュー */}
                           {gen.status === 'completed' && gen.localPath && (

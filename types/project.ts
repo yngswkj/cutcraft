@@ -91,6 +91,7 @@ export interface VideoGeneration {
   durationSec: number;
   resolution: string;
   estimatedCost: number;
+  errorMessage: string | null;
   createdAt: string;
   completedAt: string | null;
 }

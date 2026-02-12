@@ -42,8 +42,13 @@ export async function GET(
       try {
         const localPath = await downloadVideo(updated, projectId);
         updated.localPath = localPath;
+        updated.errorMessage = null;
       } catch (error) {
         console.error('Video download error:', error);
+        const detail = error instanceof Error ? error.message : '動画ファイルの保存に失敗しました';
+        updated.status = 'failed';
+        updated.completedAt = updated.completedAt ?? new Date().toISOString();
+        updated.errorMessage = detail;
       }
     }
 
