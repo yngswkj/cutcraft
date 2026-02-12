@@ -7,6 +7,26 @@ import { ensureProjectDir, saveFile, getProjectDir } from '@/lib/file-storage';
 import type { CharacterProfile, Project, Scene, SceneImage } from '@/types/project';
 
 const SAFE_ID_REGEX = /^[A-Za-z0-9-]+$/;
+const PNG_SIGNATURE = '89504e470d0a1a0a';
+
+function resolveImageExtension(imageBuffer: Buffer, mimeType?: string): '.png' | '.jpg' {
+  if (imageBuffer.length >= 8 && imageBuffer.subarray(0, 8).toString('hex') === PNG_SIGNATURE) {
+    return '.png';
+  }
+  if (
+    imageBuffer.length >= 3 &&
+    imageBuffer[0] === 0xff &&
+    imageBuffer[1] === 0xd8 &&
+    imageBuffer[2] === 0xff
+  ) {
+    return '.jpg';
+  }
+
+  const normalizedMimeType = mimeType?.trim().toLowerCase();
+  if (normalizedMimeType === 'image/png') return '.png';
+  if (normalizedMimeType === 'image/jpeg' || normalizedMimeType === 'image/jpg') return '.jpg';
+  return '.png';
+}
 
 function nonEmpty(value: string): string {
   return value.trim();
@@ -151,7 +171,8 @@ export async function POST(req: NextRequest) {
     // ファイル保存
     await ensureProjectDir(projectId);
     const imageId = uuidv4();
-    const fileName = `${sceneId}_${imageId}.png`;
+    const extension = resolveImageExtension(imageBuffer, result.mimeType);
+    const fileName = `${sceneId}_${imageId}${extension}`;
     const imagePath = path.join(getProjectDir(projectId), 'images', fileName);
     await saveFile(imagePath, imageBuffer);
 

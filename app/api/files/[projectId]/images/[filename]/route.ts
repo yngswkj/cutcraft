@@ -4,6 +4,24 @@ import path from 'path';
 import { getProjectDir } from '@/lib/file-storage';
 
 const SAFE_PROJECT_ID_REGEX = /^[A-Za-z0-9-]+$/;
+const PNG_SIGNATURE = '89504e470d0a1a0a';
+
+function detectImageContentType(fileBuffer: Buffer, fallbackFilename: string): 'image/png' | 'image/jpeg' {
+  if (fileBuffer.length >= 8 && fileBuffer.subarray(0, 8).toString('hex') === PNG_SIGNATURE) {
+    return 'image/png';
+  }
+  if (
+    fileBuffer.length >= 3 &&
+    fileBuffer[0] === 0xff &&
+    fileBuffer[1] === 0xd8 &&
+    fileBuffer[2] === 0xff
+  ) {
+    return 'image/jpeg';
+  }
+
+  const ext = path.extname(fallbackFilename).toLowerCase();
+  return ext === '.png' ? 'image/png' : 'image/jpeg';
+}
 
 export async function GET(
   _req: NextRequest,
@@ -21,8 +39,7 @@ export async function GET(
     const filePath = path.join(getProjectDir(projectId), 'images', filename);
 
     const fileBuffer = await fs.readFile(filePath);
-    const ext = path.extname(filename).toLowerCase();
-    const contentType = ext === '.png' ? 'image/png' : 'image/jpeg';
+    const contentType = detectImageContentType(fileBuffer, filename);
 
     return new NextResponse(fileBuffer, {
       headers: {

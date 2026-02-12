@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { GoogleGenAI, type GenerateVideosOperation } from '@google/genai';
+import sharp from 'sharp';
 import type { VideoGeneration, VideoStatus } from '@/types/project';
 import { getProjectDir } from './file-storage';
 import { getEffectiveSettings } from './settings';
@@ -9,6 +10,13 @@ import { getEffectiveSettings } from './settings';
 // ===== Sora (OpenAI) =====
 const OPENAI_API_BASE = 'https://api.openai.com/v1';
 const SAFE_IMAGE_PATH_REGEX = /^images\/[A-Za-z0-9._-]+$/;
+const SORA_SUPPORTED_RESOLUTIONS = [
+  { label: '1280x720', width: 1280, height: 720 },
+  { label: '1792x1024', width: 1792, height: 1024 },
+  { label: '720x1280', width: 720, height: 1280 },
+  { label: '1024x1792', width: 1024, height: 1792 },
+] as const;
+type SoraResolution = (typeof SORA_SUPPORTED_RESOLUTIONS)[number];
 
 async function getOpenAIKey(): Promise<string> {
   const settings = await getEffectiveSettings();
@@ -54,6 +62,38 @@ function nearestSoraDuration(sec: number): number {
   );
 }
 
+function nearestSoraResolution(width: number, height: number): SoraResolution {
+  const isPortrait = height > width;
+  const candidates = SORA_SUPPORTED_RESOLUTIONS.filter((item) =>
+    isPortrait ? item.height > item.width : item.width > item.height
+  );
+
+  const nearest = candidates.reduce((prev, curr) => {
+    const prevDiff = Math.abs(prev.width - width) + Math.abs(prev.height - height);
+    const currDiff = Math.abs(curr.width - width) + Math.abs(curr.height - height);
+    return currDiff < prevDiff ? curr : prev;
+  });
+
+  return nearest;
+}
+
+async function resizeImageForSora(
+  imageData: Buffer,
+  mimeType: 'image/png' | 'image/jpeg',
+  target: SoraResolution
+): Promise<Buffer> {
+  const transformer = sharp(imageData).resize(target.width, target.height, {
+    fit: 'cover',
+    position: 'centre',
+  });
+
+  if (mimeType === 'image/png') {
+    return await transformer.png().toBuffer();
+  }
+
+  return await transformer.jpeg({ quality: 95 }).toBuffer();
+}
+
 function nearestVeoDuration(sec: number): number {
   if (sec <= 5) return 5;
   return Math.min(sec, 8);
@@ -82,7 +122,19 @@ function resolveProjectImagePath(projectId: string, imagePath: string): string {
   return absPath;
 }
 
-function getImageMimeType(imagePath: string): 'image/png' | 'image/jpeg' {
+function getImageMimeType(
+  imageData: Buffer,
+  imagePath: string
+): 'image/png' | 'image/jpeg' {
+  const pngSignature = '89504e470d0a1a0a';
+  if (imageData.length >= 8 && imageData.subarray(0, 8).toString('hex') === pngSignature) {
+    return 'image/png';
+  }
+
+  if (imageData.length >= 3 && imageData[0] === 0xff && imageData[1] === 0xd8 && imageData[2] === 0xff) {
+    return 'image/jpeg';
+  }
+
   const ext = path.extname(imagePath).toLowerCase();
   if (ext === '.png') return 'image/png';
   if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg';
@@ -202,13 +254,24 @@ async function startSoraGeneration(
 
   if (params.inputImagePath) {
     const absPath = resolveProjectImagePath(params.projectId, params.inputImagePath);
-    const imageData = await fs.readFile(absPath);
-    const mimeType = getImageMimeType(absPath);
-    const dimensions = getImageDimensions(imageData, mimeType);
-    resolution = `${dimensions.width}x${dimensions.height}`;
+    const sourceImageData = await fs.readFile(absPath);
+    const sourceMimeType = getImageMimeType(sourceImageData, absPath);
+    const dimensions = getImageDimensions(sourceImageData, sourceMimeType);
+    const targetResolution = nearestSoraResolution(dimensions.width, dimensions.height);
+    resolution = targetResolution.label;
 
-    const blob = new Blob([imageData], { type: mimeType });
-    formData.append('input_reference', blob, path.basename(absPath));
+    const requiresResize =
+      dimensions.width !== targetResolution.width ||
+      dimensions.height !== targetResolution.height;
+    const uploadImageData = requiresResize
+      ? await resizeImageForSora(sourceImageData, sourceMimeType, targetResolution)
+      : sourceImageData;
+    const uploadMimeType = sourceMimeType;
+
+    const blob = new Blob([new Uint8Array(uploadImageData)], { type: uploadMimeType });
+    const parsedName = path.parse(absPath).name;
+    const uploadFilename = uploadMimeType === 'image/png' ? `${parsedName}.png` : `${parsedName}.jpg`;
+    formData.append('input_reference', blob, uploadFilename);
   }
 
   formData.append('size', resolution);
@@ -261,7 +324,7 @@ async function startVeoGeneration(
     const absPath = resolveProjectImagePath(params.projectId, params.inputImagePath);
     const imageData = await fs.readFile(absPath);
     const base64 = imageData.toString('base64');
-    const mimeType = getImageMimeType(absPath);
+    const mimeType = getImageMimeType(imageData, absPath);
     config.image = {
       imageBytes: base64,
       mimeType,

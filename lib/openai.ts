@@ -55,6 +55,7 @@ async function generateImageWithGemini(
 
   const parts = response.candidates?.[0]?.content?.parts ?? [];
   let imageBase64: string | null = null;
+  let imageMimeType: string | undefined;
   const revisedPromptTexts: string[] = [];
 
   for (const part of parts) {
@@ -65,6 +66,7 @@ async function generateImageWithGemini(
       const mimeType = part.inlineData.mimeType || '';
       if (!mimeType || mimeType.startsWith('image/')) {
         imageBase64 = part.inlineData.data;
+        imageMimeType = mimeType || undefined;
       }
     }
   }
@@ -76,6 +78,7 @@ async function generateImageWithGemini(
   return {
     b64_json: imageBase64,
     revised_prompt: revisedPromptTexts.join('\n').trim() || prompt,
+    mimeType: imageMimeType,
   };
 }
 
@@ -130,6 +133,7 @@ export async function generateBlueprint(
 export interface GenerateImageResult {
   b64_json: string;
   revised_prompt?: string;
+  mimeType?: string;
 }
 
 export async function generateImage(prompt: string): Promise<GenerateImageResult> {
