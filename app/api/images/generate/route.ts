@@ -10,31 +10,31 @@ import type { CharacterProfile, Project, Scene, SceneImage } from '@/types/proje
 import { isSafeId } from '@/lib/validation';
 import { resolveImageExtension } from '@/lib/image-utils';
 
-function nonEmpty(value: string): string {
+function trimmed(value: string): string {
   return value.trim();
 }
 
 function appendCharacterProfileLine(lines: string[], character: CharacterProfile, index: number): void {
   lines.push(`${index + 1}. ${character.name || `Character ${index + 1}`}`);
-  if (nonEmpty(character.role)) {
+  if (trimmed(character.role)) {
     lines.push(`   - Role: ${character.role}`);
   }
-  if (nonEmpty(character.ethnicityNationality)) {
+  if (trimmed(character.ethnicityNationality)) {
     lines.push(`   - Ethnicity/Nationality: ${character.ethnicityNationality}`);
   }
-  if (nonEmpty(character.ageAppearance)) {
+  if (trimmed(character.ageAppearance)) {
     lines.push(`   - Age appearance: ${character.ageAppearance}`);
   }
-  if (nonEmpty(character.genderPresentation)) {
+  if (trimmed(character.genderPresentation)) {
     lines.push(`   - Gender presentation: ${character.genderPresentation}`);
   }
-  if (nonEmpty(character.appearanceTraits)) {
+  if (trimmed(character.appearanceTraits)) {
     lines.push(`   - Appearance traits: ${character.appearanceTraits}`);
   }
-  if (nonEmpty(character.wardrobe)) {
+  if (trimmed(character.wardrobe)) {
     lines.push(`   - Wardrobe baseline: ${character.wardrobe}`);
   }
-  if (nonEmpty(character.mustKeep)) {
+  if (trimmed(character.mustKeep)) {
     lines.push(`   - Must keep: ${character.mustKeep}`);
   }
 }
@@ -88,19 +88,19 @@ function buildConsistentImagePrompt(
     'Global style bible (must apply to this image):',
   );
 
-  if (nonEmpty(guide.styleBible)) {
+  if (trimmed(guide.styleBible)) {
     sections.push(`- Visual style: ${guide.styleBible}`);
   }
-  if (nonEmpty(guide.colorPalette)) {
+  if (trimmed(guide.colorPalette)) {
     sections.push(`- Color palette: ${guide.colorPalette}`);
   }
-  if (nonEmpty(guide.lightingMood)) {
+  if (trimmed(guide.lightingMood)) {
     sections.push(`- Lighting and mood: ${guide.lightingMood}`);
   }
-  if (nonEmpty(guide.cameraLanguage)) {
+  if (trimmed(guide.cameraLanguage)) {
     sections.push(`- Camera language / composition: ${guide.cameraLanguage}`);
   }
-  if (nonEmpty(guide.negativePrompt)) {
+  if (trimmed(guide.negativePrompt)) {
     sections.push(`- Avoid: ${guide.negativePrompt}`);
   }
 

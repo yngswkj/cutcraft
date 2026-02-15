@@ -223,7 +223,7 @@ async function resizeImageForSora(
 
 function resolveVeoModelName(modelName: string): string {
   const trimmed = modelName.trim();
-  const normalized = modelName.trim().toLowerCase();
+  const normalized = trimmed.toLowerCase();
   const aliased = VEO_MODEL_ALIAS_TO_CANONICAL[normalized];
   if (aliased) {
     return aliased;
