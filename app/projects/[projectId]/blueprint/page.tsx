@@ -23,18 +23,39 @@ export default function BlueprintPage() {
   const params = useParams();
   const projectId = params.projectId as string;
   const [project, setProject] = useState<Project | null>(null);
+  const [soraModelForCost, setSoraModelForCost] = useState('sora-2');
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [editingScene, setEditingScene] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<Scene>>({});
 
   useEffect(() => {
+    let mounted = true;
+
     fetch(`/api/projects/${projectId}`)
       .then(res => res.json())
       .then(data => {
-        setProject(data);
-        setLoading(false);
+        if (mounted) {
+          setProject(data);
+          setLoading(false);
+        }
       });
+
+    fetch('/api/settings')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        const model = data?.effective?.models?.soraModel;
+        if (mounted && typeof model === 'string' && model.trim()) {
+          setSoraModelForCost(model.trim());
+        }
+      })
+      .catch(() => {
+        // 設定取得失敗時はデフォルトのSora単価で見積もる
+      });
+
+    return () => {
+      mounted = false;
+    };
   }, [projectId]);
 
   const handleGenerate = async () => {
@@ -94,6 +115,8 @@ export default function BlueprintPage() {
       durationSec: 8,
       styleDirection: '',
       videoApi: 'sora',
+      videoModelOverride: null,
+      imageApi: 'chatgpt',
       castCharacterIds: [],
       images: [],
       selectedImageId: null,
@@ -142,7 +165,7 @@ export default function BlueprintPage() {
   }
 
   const totalSec = project.scenes.reduce((sum, s) => sum + s.durationSec, 0);
-  const cost = estimateProjectCost(project.scenes);
+  const cost = estimateProjectCost(project.scenes, { soraModel: soraModelForCost });
 
   return (
     <div>
@@ -314,7 +337,7 @@ export default function BlueprintPage() {
                             {scene.videoApi === 'sora' ? 'Sora' : 'Veo'}
                           </span>
                           <span className="text-xs text-gray-400">
-                            {formatCost(estimateSceneCost(scene))}
+                            {formatCost(estimateSceneCost(scene, { soraModel: soraModelForCost }))}
                           </span>
                         </div>
                         <p className="text-sm text-gray-600 mt-1 break-words">{scene.description}</p>

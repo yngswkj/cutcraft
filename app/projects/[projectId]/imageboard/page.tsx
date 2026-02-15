@@ -20,11 +20,13 @@ import {
 } from 'lucide-react';
 import type {
   CharacterProfile,
+  ImageApi,
   ImageStyleGuide,
   Project,
   Scene,
   SceneImage,
 } from '@/types/project';
+import { getImageApiLabel } from '@/lib/scene-models';
 import type { ImageStylePreset, SettingsApiResponse } from '@/types/settings';
 import { ProjectStepNav } from '../_components/project-step-nav';
 import { ProjectStepMobileNav } from '../_components/project-step-mobile-nav';
@@ -158,6 +160,7 @@ export default function ImageboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [expandedScenes, setExpandedScenes] = useState<Set<string>>(new Set());
   const [generatingScenes, setGeneratingScenes] = useState<Set<string>>(new Set());
+  const [savingImageApiScenes, setSavingImageApiScenes] = useState<Set<string>>(new Set());
   const [styleGuide, setStyleGuide] = useState<ImageStyleGuide>(DEFAULT_IMAGE_STYLE_GUIDE);
   const [characterBible, setCharacterBible] = useState<CharacterProfile[]>([]);
   const [savingStyleGuide, setSavingStyleGuide] = useState(false);
@@ -499,6 +502,39 @@ export default function ImageboardPage() {
         })),
       };
     });
+  };
+
+  const updateSceneImageApi = async (sceneId: string, imageApi: ImageApi) => {
+    if (!project) return;
+    setSavingImageApiScenes(prev => new Set(prev).add(sceneId));
+    try {
+      const updated = {
+        ...project,
+        scenes: project.scenes.map((scene) =>
+          scene.id === sceneId ? { ...scene, imageApi } : scene
+        ),
+      };
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || '画像APIの更新に失敗しました');
+      }
+      const nextProject = await res.json();
+      setProject(nextProject);
+    } catch (saveError) {
+      const message = saveError instanceof Error ? saveError.message : '画像APIの更新に失敗しました';
+      alert(message);
+    } finally {
+      setSavingImageApiScenes(prev => {
+        const next = new Set(prev);
+        next.delete(sceneId);
+        return next;
+      });
+    }
   };
 
   const toggleSceneCastCharacter = async (sceneId: string, characterId: string, checked: boolean) => {
@@ -1027,32 +1063,68 @@ export default function ImageboardPage() {
               key={scene.id}
               className="bg-white rounded-lg border border-gray-200"
             >
-              <button
-                onClick={() => toggleScene(scene.id)}
-                className="w-full flex items-center gap-3 p-4 text-left hover:bg-gray-50 transition"
-              >
-                <div className="flex-shrink-0 text-gray-400 text-sm font-mono w-6 text-right">
-                  {index + 1}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-medium">{scene.title}</h3>
-                    <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
-                      {scene.durationSec}秒
-                    </span>
-                    {scene.images.length > 0 && (
-                      <span className="text-xs bg-green-50 text-green-600 px-1.5 py-0.5 rounded flex items-center gap-1">
-                        <ImageIcon size={12} />
-                        {scene.images.length}枚
-                      </span>
-                    )}
+              <div className="w-full flex items-center gap-3 p-4 hover:bg-gray-50 transition">
+                <button
+                  onClick={() => toggleScene(scene.id)}
+                  className="flex-1 min-w-0 flex items-center gap-3 text-left"
+                >
+                  <div className="flex-shrink-0 text-gray-400 text-sm font-mono w-6 text-right">
+                    {index + 1}
                   </div>
-                  <p className="text-sm text-gray-600 mt-1 truncate">{scene.description}</p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-medium">{scene.title}</h3>
+                      <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
+                        {scene.durationSec}秒
+                      </span>
+                      {scene.images.length > 0 && (
+                        <span className="text-xs bg-green-50 text-green-600 px-1.5 py-0.5 rounded flex items-center gap-1">
+                          <ImageIcon size={12} />
+                          {scene.images.length}枚
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-600 mt-1 truncate">{scene.description}</p>
+                  </div>
+                </button>
+
+                <div className="flex-shrink-0 flex items-center gap-2">
+                  <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => updateSceneImageApi(scene.id, 'chatgpt')}
+                      disabled={savingImageApiScenes.has(scene.id)}
+                      className={`px-2 py-1 text-xs rounded-md transition ${
+                        scene.imageApi === 'chatgpt'
+                          ? 'bg-primary-600 text-white'
+                          : 'text-gray-600 hover:bg-gray-100'
+                      } disabled:opacity-50`}
+                    >
+                      ChatGPT
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateSceneImageApi(scene.id, 'nanobananapro')}
+                      disabled={savingImageApiScenes.has(scene.id)}
+                      className={`px-2 py-1 text-xs rounded-md transition ${
+                        scene.imageApi === 'nanobananapro'
+                          ? 'bg-primary-600 text-white'
+                          : 'text-gray-600 hover:bg-gray-100'
+                      } disabled:opacity-50`}
+                    >
+                      nano banana pro
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleScene(scene.id)}
+                    className="text-gray-400 hover:text-gray-600 transition"
+                    aria-label={isExpanded ? 'シーンを折りたたむ' : 'シーンを展開する'}
+                  >
+                    {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                  </button>
                 </div>
-                <div className="flex-shrink-0 text-gray-400">
-                  {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                </div>
-              </button>
+              </div>
 
               {isExpanded && (
                 <div className="border-t border-gray-200 p-4 space-y-4">
@@ -1095,6 +1167,9 @@ export default function ImageboardPage() {
                     <label className="block text-sm font-medium mb-2">
                       画像生成プロンプト
                     </label>
+                    <p className="text-xs text-primary-600 mb-1">
+                      使用モデル: {getImageApiLabel(scene.imageApi)}
+                    </p>
                     <p className="text-xs text-gray-500 mb-2">
                       入力内容に加えて、共通設定パネルの「プロジェクト共通スタイル」が自動で適用されます。
                     </p>

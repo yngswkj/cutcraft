@@ -2,16 +2,19 @@ import { NextResponse } from 'next/server';
 import { getProject, updateProject, deleteProject } from '@/lib/project-store';
 import type {
   CharacterProfile,
+  ImageApi,
   ImageStyleGuide,
   Project,
   PromptMetadata,
   Scene,
+  SceneVideoModelOverride,
   SceneImage,
   VideoApiPreference,
   VideoGeneration,
   VideoStatus,
   WorkflowStep,
 } from '@/types/project';
+import { VEO_31_FAST_MODEL } from '@/lib/scene-models';
 
 const SAFE_PROJECT_ID_REGEX = /^[A-Za-z0-9-]+$/;
 const SAFE_ID_REGEX = /^[A-Za-z0-9-]+$/;
@@ -20,6 +23,7 @@ const SAFE_IMAGE_PATH_REGEX = /^images\/[A-Za-z0-9._-]+$/;
 const WORKFLOW_STEPS = new Set<WorkflowStep>(['blueprint', 'imageboard', 'script', 'generate', 'complete']);
 const VIDEO_API_PREFERENCES = new Set<VideoApiPreference>(['auto', 'sora', 'veo']);
 const VIDEO_APIS = new Set<'sora' | 'veo'>(['sora', 'veo']);
+const IMAGE_APIS = new Set<ImageApi>(['chatgpt', 'nanobananapro']);
 const VIDEO_STATUSES = new Set<VideoStatus>(['queued', 'processing', 'completed', 'failed']);
 const MAX_CHARACTER_COUNT = 30;
 const MAX_CHARACTER_FIELD_LENGTH = 1000;
@@ -342,6 +346,19 @@ function parseScene(value: unknown, fallbackOrder: number, projectId: string): S
   const videoApi = typeof value.videoApi === 'string' && VIDEO_APIS.has(value.videoApi as 'sora' | 'veo')
     ? value.videoApi as 'sora' | 'veo'
     : null;
+  const imageApi = (value.imageApi === null || value.imageApi === undefined)
+    ? 'chatgpt'
+    : (typeof value.imageApi === 'string' && IMAGE_APIS.has(value.imageApi as ImageApi)
+      ? value.imageApi as ImageApi
+      : null);
+  let videoModelOverride: SceneVideoModelOverride;
+  if (value.videoModelOverride === null || value.videoModelOverride === undefined || value.videoModelOverride === '') {
+    videoModelOverride = null;
+  } else if (value.videoModelOverride === VEO_31_FAST_MODEL) {
+    videoModelOverride = VEO_31_FAST_MODEL;
+  } else {
+    return null;
+  }
 
   if (
     id === null ||
@@ -349,9 +366,16 @@ function parseScene(value: unknown, fallbackOrder: number, projectId: string): S
     description === null ||
     durationSec === null ||
     styleDirection === null ||
-    videoApi === null
+    videoApi === null ||
+    imageApi === null
   ) {
     return null;
+  }
+
+  if (videoApi === 'sora') {
+    videoModelOverride = null;
+  } else if (videoModelOverride === null) {
+    videoModelOverride = VEO_31_FAST_MODEL;
   }
 
   if ('images' in value && !Array.isArray(value.images)) return null;
@@ -428,6 +452,8 @@ function parseScene(value: unknown, fallbackOrder: number, projectId: string): S
     durationSec,
     styleDirection,
     videoApi,
+    videoModelOverride,
+    imageApi,
     castCharacterIds,
     images,
     selectedImageId,

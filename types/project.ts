@@ -1,6 +1,8 @@
 export type WorkflowStep = 'blueprint' | 'imageboard' | 'script' | 'generate' | 'complete';
 
 export type VideoApiPreference = 'auto' | 'sora' | 'veo';
+export type ImageApi = 'chatgpt' | 'nanobananapro';
+export type SceneVideoModelOverride = 'veo-3.1-fast' | null;
 
 export interface ImageStyleGuide {
   styleBible: string;
@@ -44,6 +46,8 @@ export interface Scene {
   durationSec: number;
   styleDirection: string;
   videoApi: 'sora' | 'veo';
+  videoModelOverride: SceneVideoModelOverride;
+  imageApi: ImageApi;
   castCharacterIds: string[];
   // イメージボード
   images: SceneImage[];

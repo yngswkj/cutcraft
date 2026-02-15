@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { GoogleGenAI } from '@google/genai';
 import { getEffectiveSettings, renderPromptTemplate } from './settings';
+import { NANO_BANANA_PRO_IMAGE_MODEL } from './scene-models';
 import type { BlueprintResult, VideoApiPreference } from '@/types/project';
 
 function getClient(apiKey: string): OpenAI {
@@ -27,17 +28,10 @@ function resolveGeminiImageModel(modelName: string): string | null {
     normalized === 'nano-banana-pro' ||
     normalized === 'nano banana pro'
   ) {
-    return 'gemini-3-pro-image-preview';
+    return NANO_BANANA_PRO_IMAGE_MODEL;
   }
-  if (
-    normalized === 'nanobanana' ||
-    normalized === 'nano-banana' ||
-    normalized === 'nano banana'
-  ) {
-    return 'gemini-2.5-flash-image';
-  }
-  if (normalized.startsWith('gemini-') && normalized.includes('image')) {
-    return modelName.trim();
+  if (normalized === NANO_BANANA_PRO_IMAGE_MODEL) {
+    return NANO_BANANA_PRO_IMAGE_MODEL;
   }
   return null;
 }
@@ -86,11 +80,11 @@ function buildBlueprintApiInstruction(apiPreference: VideoApiPreference): string
   const apiInstruction = apiPreference === 'auto'
     ? `- suggestedApi: シーンの特性に応じて最適なAPIを選択する
   - "sora": 動きが大きいシーン、短中尺（4/8/12秒）、カメラワークが複雑なシーン向き
-  - "veo": 短尺（最大8秒）、高品質・高解像度が必要なシーン、静的な美しさ重視のシーン向き`
+  - "veo": Veo 3.1 Fast（4/6/8秒）向き。短尺で高速生成・高品質が必要なシーン、静的な美しさ重視のシーン向き`
     : `- suggestedApi: すべてのシーンで "${apiPreference}" を指定すること
   ${apiPreference === 'sora'
     ? '- Sora の制約: 各シーンは4/8/12秒'
-    : '- Veo の制約: 各シーン最大8秒'}`;
+    : '- Veo 3.1 Fast の制約: 各シーンは4/6/8秒'}`;
 
   return apiInstruction;
 }
@@ -136,9 +130,21 @@ export interface GenerateImageResult {
   mimeType?: string;
 }
 
-export async function generateImage(prompt: string): Promise<GenerateImageResult> {
+export interface GenerateImageOptions {
+  modelOverride?: string;
+}
+
+function isGptImageModel(modelName: string): boolean {
+  const normalized = modelName.trim().toLowerCase();
+  return normalized.startsWith('gpt-image');
+}
+
+export async function generateImage(
+  prompt: string,
+  options: GenerateImageOptions = {}
+): Promise<GenerateImageResult> {
   const settings = await getEffectiveSettings();
-  const imageModel = settings.models.imageModel.trim();
+  const imageModel = (options.modelOverride || settings.models.imageModel).trim();
   const geminiImageModel = resolveGeminiImageModel(imageModel);
 
   if (geminiImageModel) {
@@ -148,20 +154,27 @@ export async function generateImage(prompt: string): Promise<GenerateImageResult
     }
     return generateImageWithGemini(prompt, geminiImageModel, googleApiKey);
   }
+  if (!isGptImageModel(imageModel)) {
+    throw new Error(
+      `未対応の画像モデルです: ${imageModel}. gpt-image* または nanobananapro（${NANO_BANANA_PRO_IMAGE_MODEL}）のみ使用できます`,
+    );
+  }
 
   const openAiKey = settings.apiKeys.openaiApiKey;
   if (!openAiKey) {
     throw new Error('OPENAI_API_KEY が設定されていません（設定画面または .env.local）');
   }
   const client = getClient(openAiKey);
-  const response = await client.images.generate({
+  const request: OpenAI.Images.ImageGenerateParams = {
     model: imageModel,
     prompt,
     n: 1,
-    size: '1792x1024', // 16:9 横長（動画に適したアスペクト比）
-    quality: 'hd',
-    response_format: 'b64_json',
-  });
+    size: '1536x1024', // gpt-image 系の横長最大サイズ
+    quality: 'high',
+    output_format: 'png',
+  };
+
+  const response = await client.images.generate(request);
 
   if (!response.data || response.data.length === 0) {
     throw new Error('画像生成に失敗しました');
@@ -191,15 +204,19 @@ export async function generateVideoScript(
   sceneDescription: string,
   styleDirection: string,
   videoApi: 'sora' | 'veo',
+  options: { videoApiLabel?: string; videoApiHint?: string } = {},
 ): Promise<GenerateScriptResult> {
   const { client, settings } = await getConfiguredOpenAIClient();
+  const defaultLabel = videoApi === 'sora' ? 'Sora' : 'Veo 3.1 Fast';
+  const defaultHint = videoApi === 'sora'
+    ? 'Sora 2 は4/8/12秒の短中尺と複雑なカメラワークが得意'
+    : 'Veo 3.1 Fast は4/6/8秒の短尺高速生成に向いている';
+
   const systemPrompt = renderPromptTemplate(
     settings.prompts.scriptSystemPromptTemplate,
     {
-      VIDEO_API_LABEL: videoApi === 'sora' ? 'Sora' : 'Veo',
-      VIDEO_API_HINT: videoApi === 'sora'
-        ? 'Sora 2 は4/8/12秒の短中尺と複雑なカメラワークが得意'
-        : 'Veo は短尺で高品質、静的な美しさが得意',
+      VIDEO_API_LABEL: options.videoApiLabel || defaultLabel,
+      VIDEO_API_HINT: options.videoApiHint || defaultHint,
     },
   );
 

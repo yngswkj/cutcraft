@@ -2,11 +2,13 @@ import { v4 as uuidv4 } from 'uuid';
 import type {
   BlueprintScene,
   CharacterProfile,
+  ImageApi,
   ImageStyleGuide,
   Project,
   Scene,
   VideoApiPreference,
 } from '@/types/project';
+import { VEO_31_FAST_MODEL } from './scene-models';
 import {
   readJsonFile,
   writeJsonFile,
@@ -98,9 +100,17 @@ function normalizeProject(project: Project): Project {
         )
         : [];
 
+      const imageApi: ImageApi = scene.imageApi === 'nanobananapro' ? 'nanobananapro' : 'chatgpt';
+      const videoModelOverride =
+        scene.videoApi === 'veo'
+          ? VEO_31_FAST_MODEL
+          : null;
+
       return {
         ...scene,
         castCharacterIds,
+        imageApi,
+        videoModelOverride,
       };
     }),
   };
@@ -171,6 +181,8 @@ export function createSceneFromBlueprint(
     durationSec: blueprint.durationSec,
     styleDirection: blueprint.styleDirection,
     videoApi,
+    videoModelOverride: videoApi === 'veo' ? VEO_31_FAST_MODEL : null,
+    imageApi: 'chatgpt',
     castCharacterIds: [],
     images: [],
     selectedImageId: null,

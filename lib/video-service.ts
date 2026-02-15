@@ -6,6 +6,12 @@ import sharp from 'sharp';
 import type { VideoGeneration, VideoStatus } from '@/types/project';
 import { getProjectDir } from './file-storage';
 import { getEffectiveSettings } from './settings';
+import {
+  getSoraCostPerSec,
+  quantizeSoraDuration,
+  quantizeVeo31FastDuration,
+  VEO_31_FAST_COST_PER_SEC,
+} from './scene-models';
 
 // ===== Sora (OpenAI) =====
 const OPENAI_API_BASE = 'https://api.openai.com/v1';
@@ -17,6 +23,12 @@ const SORA_SUPPORTED_RESOLUTIONS = [
   { label: '720x1280', width: 720, height: 1280 },
   { label: '1024x1792', width: 1024, height: 1792 },
 ] as const;
+const VEO_MODEL_ALIAS_TO_CANONICAL: Record<string, string> = {
+  'veo-3.1-fast': 'models/veo-3.1-fast-generate-preview',
+  'models/veo-3.1-fast': 'models/veo-3.1-fast-generate-preview',
+  'veo-3.1-fast-generate-preview': 'models/veo-3.1-fast-generate-preview',
+  'models/veo-3.1-fast-generate-preview': 'models/veo-3.1-fast-generate-preview',
+};
 type SoraResolution = (typeof SORA_SUPPORTED_RESOLUTIONS)[number];
 type SoraModerationResult = { flagged: boolean; reason: string | null };
 
@@ -179,13 +191,6 @@ async function soraRequest(endpoint: string, options?: RequestInit) {
   return res;
 }
 
-function nearestSoraDuration(sec: number): number {
-  const options = [4, 8, 12];
-  return options.reduce((prev, curr) =>
-    Math.abs(curr - sec) < Math.abs(prev - sec) ? curr : prev
-  );
-}
-
 function nearestSoraResolution(width: number, height: number): SoraResolution {
   const isPortrait = height > width;
   const candidates = SORA_SUPPORTED_RESOLUTIONS.filter((item) =>
@@ -218,16 +223,20 @@ async function resizeImageForSora(
   return await transformer.jpeg({ quality: 95 }).toBuffer();
 }
 
-function nearestVeoDuration(sec: number): number {
-  if (sec <= 5) return 5;
-  return Math.min(sec, 8);
-}
-
-function getSoraCostPerSec(modelName: string): number {
+function resolveVeoModelName(modelName: string): string {
+  const trimmed = modelName.trim();
   const normalized = modelName.trim().toLowerCase();
-  if (normalized === 'sora-2-pro') return 0.30;
-  if (normalized === 'sora-2') return 0.10;
-  return 0.10;
+  const aliased = VEO_MODEL_ALIAS_TO_CANONICAL[normalized];
+  if (aliased) {
+    return aliased;
+  }
+  if (normalized.startsWith('models/')) {
+    return trimmed;
+  }
+  if (normalized.startsWith('veo-')) {
+    return `models/${trimmed}`;
+  }
+  return trimmed;
 }
 
 function resolveProjectImagePath(projectId: string, imagePath: string): string {
@@ -348,6 +357,7 @@ export interface GenerateVideoParams {
   prompt: string;
   durationSec: number;
   api: 'sora' | 'veo';
+  modelOverride?: string;
   inputImagePath?: string;
   version: number;
 }
@@ -368,7 +378,7 @@ async function startSoraGeneration(
   params: GenerateVideoParams
 ): Promise<VideoGeneration> {
   const settings = await getEffectiveSettings();
-  const duration = nearestSoraDuration(params.durationSec);
+  const duration = quantizeSoraDuration(params.durationSec);
   let resolution = '1280x720';
   let uploadImageData: Buffer | null = null;
   let uploadMimeType: 'image/png' | 'image/jpeg' | null = null;
@@ -449,7 +459,7 @@ async function startSoraGeneration(
     }
   }
 
-  const costPerSec = getSoraCostPerSec(settings.models.soraModel);
+  const costPerSec = getSoraCostPerSec(settings.models.soraModel, resolution);
   return {
     id,
     sceneId: params.sceneId,
@@ -477,7 +487,10 @@ async function startVeoGeneration(
   params: GenerateVideoParams
 ): Promise<VideoGeneration> {
   const settings = await getEffectiveSettings();
-  const duration = nearestVeoDuration(params.durationSec);
+  const requestedDuration = params.durationSec;
+  const duration = quantizeVeo31FastDuration(requestedDuration);
+  const requestedModel = (params.modelOverride || settings.models.veoModel).trim();
+  const selectedModel = resolveVeoModelName(requestedModel);
   const ai = await getGeminiClient();
 
   const config: Record<string, unknown> = {
@@ -498,13 +511,21 @@ async function startVeoGeneration(
     };
   }
 
-  const operation = await ai.models.generateVideos({
-    model: settings.models.veoModel,
-    prompt: params.prompt,
-    config,
-  });
+  let operation: GenerateVideosOperation;
+  try {
+    operation = await ai.models.generateVideos({
+      model: selectedModel,
+      prompt: params.prompt,
+      config,
+    });
+  } catch (error) {
+    const detail = summarizeErrorDetail(error) || 'Veo API呼び出しに失敗しました';
+    throw new Error(
+      `Veo API呼び出しに失敗しました (requestedModel: ${requestedModel}, resolvedModel: ${selectedModel}, requestedDuration: ${requestedDuration}, resolvedDuration: ${duration}): ${detail}`,
+    );
+  }
 
-  const costPerSec = 0.75;
+  const costPerSec = VEO_31_FAST_COST_PER_SEC;
   return {
     id,
     sceneId: params.sceneId,

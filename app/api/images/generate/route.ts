@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
+import sharp from 'sharp';
 import { generateImage } from '@/lib/openai';
+import { resolveImageModelByApi } from '@/lib/scene-models';
 import { getProject, updateProject } from '@/lib/project-store';
 import { ensureProjectDir, saveFile, getProjectDir } from '@/lib/file-storage';
 import type { CharacterProfile, Project, Scene, SceneImage } from '@/types/project';
@@ -163,10 +165,14 @@ export async function POST(req: NextRequest) {
 
     // 設定された画像モデルで画像生成
     const consistentPrompt = buildConsistentImagePrompt(project, scene, prompt);
-    const result = await generateImage(consistentPrompt);
+    const imageModel = resolveImageModelByApi(scene.imageApi);
+    const result = await generateImage(consistentPrompt, { modelOverride: imageModel });
 
     // Base64をBufferに変換
     const imageBuffer = Buffer.from(result.b64_json, 'base64');
+    const metadata = await sharp(imageBuffer).metadata();
+    const width = typeof metadata.width === 'number' ? metadata.width : 1536;
+    const height = typeof metadata.height === 'number' ? metadata.height : 1024;
 
     // ファイル保存
     await ensureProjectDir(projectId);
@@ -182,8 +188,8 @@ export async function POST(req: NextRequest) {
       sceneId,
       prompt: result.revised_prompt || consistentPrompt,
       localPath: `/api/files/${projectId}/images/${fileName}`,
-      width: 1792,
-      height: 1024,
+      width,
+      height,
       createdAt: new Date().toISOString(),
     };
 

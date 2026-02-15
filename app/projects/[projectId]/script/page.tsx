@@ -14,6 +14,12 @@ import {
   Zap,
 } from 'lucide-react';
 import type { Project, Scene } from '@/types/project';
+import {
+  getSceneVideoChoice,
+  getSceneVideoLabel,
+  getSceneVideoSelection,
+  type SceneVideoChoice,
+} from '@/lib/scene-models';
 import { ProjectStepNav } from '../_components/project-step-nav';
 import { ProjectStepMobileNav } from '../_components/project-step-mobile-nav';
 
@@ -25,6 +31,7 @@ export default function ScriptPage() {
   const [error, setError] = useState<string | null>(null);
   const [expandedScenes, setExpandedScenes] = useState<Set<string>>(new Set());
   const [generatingScenes, setGeneratingScenes] = useState<Set<string>>(new Set());
+  const [savingVideoApiScenes, setSavingVideoApiScenes] = useState<Set<string>>(new Set());
   const [bulkGenerating, setBulkGenerating] = useState(false);
   const [editingScenes, setEditingScenes] = useState<Record<string, Scene>>({});
 
@@ -70,6 +77,54 @@ export default function ScriptPage() {
       }
       return next;
     });
+  };
+
+  const updateSceneVideoChoice = async (sceneId: string, choice: SceneVideoChoice) => {
+    if (!project) return;
+    setSavingVideoApiScenes(prev => new Set(prev).add(sceneId));
+    try {
+      const nextSelection = getSceneVideoSelection(choice);
+      const updated = {
+        ...project,
+        scenes: project.scenes.map((scene) => (
+          scene.id === sceneId
+            ? { ...scene, ...nextSelection }
+            : scene
+        )),
+      };
+
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || '動画APIの更新に失敗しました');
+      }
+      const nextProject = await res.json();
+      setProject(nextProject);
+      setEditingScenes(prev => {
+        const editingScene = prev[sceneId];
+        if (!editingScene) return prev;
+        return {
+          ...prev,
+          [sceneId]: {
+            ...editingScene,
+            ...nextSelection,
+          },
+        };
+      });
+    } catch (saveError) {
+      const message = saveError instanceof Error ? saveError.message : '動画APIの更新に失敗しました';
+      alert(message);
+    } finally {
+      setSavingVideoApiScenes(prev => {
+        const next = new Set(prev);
+        next.delete(sceneId);
+        return next;
+      });
+    }
   };
 
   const generateScript = async (sceneId: string) => {
@@ -285,45 +340,82 @@ export default function ScriptPage() {
         {project.scenes.map((scene, index) => {
           const isExpanded = expandedScenes.has(scene.id);
           const isGenerating = generatingScenes.has(scene.id);
+          const isSavingVideoApi = savingVideoApiScenes.has(scene.id);
           const isEditing = !!editingScenes[scene.id];
           const editScene = editingScenes[scene.id] || scene;
           const selectedImage = scene.images.find(img => img.id === scene.selectedImageId);
+          const videoChoice = getSceneVideoChoice(scene);
 
           return (
             <div
               key={scene.id}
               className="bg-white rounded-lg border border-gray-200"
             >
-              <button
-                onClick={() => toggleScene(scene.id)}
-                className="w-full flex items-center gap-3 p-4 text-left hover:bg-gray-50 transition"
-              >
-                <div className="flex-shrink-0 text-gray-400 text-sm font-mono w-6 text-right">
-                  {index + 1}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-medium">{scene.title}</h3>
-                    <span className={`text-xs px-1.5 py-0.5 rounded ${
-                      scene.videoApi === 'sora'
-                        ? 'bg-blue-50 text-blue-600'
-                        : 'bg-purple-50 text-purple-600'
-                    }`}>
-                      {scene.videoApi === 'sora' ? 'Sora' : 'Veo'}
-                    </span>
-                    {scene.videoPrompt && (
-                      <span className="text-xs bg-green-50 text-green-600 px-1.5 py-0.5 rounded flex items-center gap-1">
-                        <Video size={12} />
-                        台本あり
-                      </span>
-                    )}
+              <div className="w-full flex items-center gap-3 p-4 hover:bg-gray-50 transition">
+                <button
+                  onClick={() => toggleScene(scene.id)}
+                  className="flex-1 min-w-0 flex items-center gap-3 text-left"
+                >
+                  <div className="flex-shrink-0 text-gray-400 text-sm font-mono w-6 text-right">
+                    {index + 1}
                   </div>
-                  <p className="text-sm text-gray-600 mt-1 truncate">{scene.description}</p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-medium">{scene.title}</h3>
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${
+                        scene.videoApi === 'sora'
+                          ? 'bg-blue-50 text-blue-600'
+                          : 'bg-purple-50 text-purple-600'
+                      }`}>
+                        {getSceneVideoLabel(scene)}
+                      </span>
+                      {scene.videoPrompt && (
+                        <span className="text-xs bg-green-50 text-green-600 px-1.5 py-0.5 rounded flex items-center gap-1">
+                          <Video size={12} />
+                          台本あり
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-600 mt-1 truncate">{scene.description}</p>
+                  </div>
+                </button>
+                <div className="flex-shrink-0 flex items-center gap-2">
+                  <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => updateSceneVideoChoice(scene.id, 'sora')}
+                      disabled={isSavingVideoApi || isGenerating}
+                      className={`px-2 py-1 text-xs rounded-md transition ${
+                        videoChoice === 'sora'
+                          ? 'bg-primary-600 text-white'
+                          : 'text-gray-600 hover:bg-gray-100'
+                      } disabled:opacity-50`}
+                    >
+                      Sora
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateSceneVideoChoice(scene.id, 'veo31fast')}
+                      disabled={isSavingVideoApi || isGenerating}
+                      className={`px-2 py-1 text-xs rounded-md transition ${
+                        videoChoice === 'veo31fast'
+                          ? 'bg-primary-600 text-white'
+                          : 'text-gray-600 hover:bg-gray-100'
+                      } disabled:opacity-50`}
+                    >
+                      Veo 3.1 Fast
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleScene(scene.id)}
+                    className="text-gray-400 hover:text-gray-600 transition"
+                    aria-label={isExpanded ? 'シーンを折りたたむ' : 'シーンを展開する'}
+                  >
+                    {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                  </button>
                 </div>
-                <div className="flex-shrink-0 text-gray-400">
-                  {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                </div>
-              </button>
+              </div>
 
               {isExpanded && (
                 <div className="border-t border-gray-200 p-4 space-y-4">

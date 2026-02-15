@@ -20,9 +20,9 @@ export const SETTINGS_FILE_PATH = path.join(process.cwd(), 'data', 'settings.jso
 
 export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
   llmModel: 'gpt-5.1',
-  imageModel: 'dall-e-3',
+  imageModel: 'gpt-image-1.5',
   soraModel: 'sora-2',
-  veoModel: 'veo-2',
+  veoModel: 'veo-3.1-fast',
 };
 
 const DEFAULT_BLUEPRINT_PROMPT_TEMPLATE = `あなたは映像ディレクターです。ユーザーのテーマから約2分間の動画の設計図を作成してください。

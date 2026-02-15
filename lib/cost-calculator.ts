@@ -1,30 +1,48 @@
 import type { Scene } from '@/types/project';
+import {
+  estimateImageCostPerScene,
+  getSoraCostPerSec,
+  quantizeSoraDuration,
+  quantizeVeo31FastDuration,
+  VEO_31_FAST_COST_PER_SEC,
+} from './scene-models';
 
-// USD単価
-const COST_PER_SEC = {
-  sora_480p: 0.02,
-  sora_720p: 0.10, // Sora 2
-  sora_1080p: 0.10,
-  veo: 0.75,
-  veo_fast: 0.40,
-} as const;
+const DEFAULT_SORA_MODEL = 'sora-2';
 
-const DALLE3_HD_COST = 0.12; // per image
-
-export function estimateSceneCost(scene: Scene): number {
-  if (scene.videoApi === 'sora') {
-    return scene.durationSec * COST_PER_SEC.sora_720p;
-  }
-  return scene.durationSec * COST_PER_SEC.veo;
+interface EstimateOptions {
+  soraModel?: string;
 }
 
-export function estimateProjectCost(scenes: Scene[]): {
+function resolveEstimatedSoraResolution(scene: Scene): string {
+  if (!scene.useAsVideoInput || !scene.selectedImageId) {
+    return '1280x720';
+  }
+
+  const selectedImage = scene.images.find((image) => image.id === scene.selectedImageId);
+  if (!selectedImage) {
+    return '1280x720';
+  }
+
+  return selectedImage.height > selectedImage.width ? '1024x1792' : '1792x1024';
+}
+
+export function estimateSceneCost(scene: Scene, options: EstimateOptions = {}): number {
+  if (scene.videoApi === 'sora') {
+    const model = options.soraModel || DEFAULT_SORA_MODEL;
+    const duration = quantizeSoraDuration(scene.durationSec);
+    const resolution = resolveEstimatedSoraResolution(scene);
+    return duration * getSoraCostPerSec(model, resolution);
+  }
+  return quantizeVeo31FastDuration(scene.durationSec) * VEO_31_FAST_COST_PER_SEC;
+}
+
+export function estimateProjectCost(scenes: Scene[], options: EstimateOptions = {}): {
   videoCost: number;
   imageCost: number;
   total: number;
 } {
-  const videoCost = scenes.reduce((sum, s) => sum + estimateSceneCost(s), 0);
-  const imageCost = scenes.length * DALLE3_HD_COST;
+  const videoCost = scenes.reduce((sum, scene) => sum + estimateSceneCost(scene, options), 0);
+  const imageCost = scenes.reduce((sum, scene) => sum + estimateImageCostPerScene(scene.imageApi), 0);
   return {
     videoCost: Math.round(videoCost * 100) / 100,
     imageCost: Math.round(imageCost * 100) / 100,

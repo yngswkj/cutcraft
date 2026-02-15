@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateVideoScript } from '@/lib/openai';
+import { getSceneVideoLabel, getSceneVideoChoice } from '@/lib/scene-models';
 import { getProject, updateProject } from '@/lib/project-store';
 
 const SAFE_ID_REGEX = /^[A-Za-z0-9-]+$/;
@@ -33,11 +34,18 @@ export async function POST(req: NextRequest) {
     }
 
     // LLMでスクリプト生成
+    const videoChoice = getSceneVideoChoice(scene);
     const result = await generateVideoScript(
       scene.title,
       scene.description,
       scene.styleDirection,
       scene.videoApi,
+      {
+        videoApiLabel: getSceneVideoLabel(scene),
+        videoApiHint: videoChoice === 'veo31fast'
+          ? 'Veo 3.1 Fast は4/6/8秒の短尺で高速生成に向いています'
+          : undefined,
+      },
     );
 
     // シーンに反映

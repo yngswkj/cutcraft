@@ -11,9 +11,10 @@
 | アイコン | lucide-react | ^0.290.0 |
 | フォント | Noto Sans JP (next/font/google) | - |
 | LLM | OpenAI GPT-4o (openai) | ^4.77.0 |
-| 画像生成 | OpenAI DALL-E 3 (openai) | ^4.77.0 |
+| 画像生成 | OpenAI GPT Image 1.5 (openai) | ^4.77.0 |
+| 画像生成 | Google Gemini 3 Pro Image Preview (@google/genai) | ^1.40.0 |
 | 動画生成 | OpenAI Sora (HTTP直接) | - |
-| 動画生成 | Google Veo 2 (@google/genai) | ^1.40.0 |
+| 動画生成 | Google Veo 3.1 Fast (@google/genai) | ^1.40.0 |
 | ID生成 | uuid | ^9.0.0 |
 | コード品質 | ESLint + eslint-config-next | ^8 / ^14.2.0 |
 
@@ -37,7 +38,7 @@
 │                                                             │
 │  /api/projects/*          CRUD 操作                          │
 │  /api/blueprint/generate  GPT-4o 呼び出し                    │
-│  /api/images/generate     DALL-E 3 呼び出し                  │
+│  /api/images/generate     GPT Image / Gemini 呼び出し        │
 │  /api/scripts/generate    GPT-4o 呼び出し                    │
 │  /api/videos/generate     Sora / Veo 呼び出し                │
 │  /api/videos/status/*     ステータスポーリング                │
@@ -57,8 +58,8 @@
 ┌────────────────────▼────────────────────────────────────────┐
 │                    外部サービス                               │
 │                                                             │
-│  OpenAI API ─── GPT-4o / DALL-E 3 / Sora                   │
-│  Google API ─── Veo 2 (Gemini)                              │
+│  OpenAI API ─── GPT-4o / GPT Image 1.5 / Sora              │
+│  Google API ─── Veo 3.1 Fast (Gemini)                       │
 │  ffmpeg    ─── 動画フレーム抽出                               │
 └─────────────────────────────────────────────────────────────┘
                      │
@@ -260,8 +261,8 @@ System: 映像ディレクターロール
   - 120秒の動画を8-15シーンに分割
   - APIプリファレンスに応じた指示
     - auto: シーン特性に応じてSora/Veoを選択
-    - sora: 全シーンSora（最大20秒）
-    - veo: 全シーンVeo（最大8秒）
+    - sora: 全シーンSora（4/8/12秒）
+    - veo: 全シーンVeo 3.1 Fast（4/6/8秒）
 User: テーマ文
 ```
 
@@ -274,34 +275,36 @@ System: 映像プロダクション専門家ロール
 User: シーンタイトル + 説明 + スタイル方向性
 ```
 
-### OpenAI DALL-E 3
+### 画像生成モデル（シーン別切替）
 
 - **用途**: イメージボード画像生成
-- **モデル**: `dall-e-3`
-- **サイズ**: 1792×1024（16:9横長）
-- **品質**: HD
-- **出力**: Base64 JSON
+- **ChatGPT 側モデル**: `gpt-image-1.5`
+- **ChatGPT 側サイズ/品質**: `1536x1024`, `high`, `png`
+- **nano banana pro 側モデル**: `gemini-3-pro-image-preview`
+- **出力**: Base64 JSON（`image/png` または `image/jpeg`）
 
 ### OpenAI Sora
 
 - **用途**: 動画生成
 - **接続**: HTTP直接（SDK未対応のため）
-- **エンドポイント**: `https://api.openai.com/v1/videos/generations`
-- **対応秒数**: 5, 10, 15, 20秒（最寄りに丸め）
+- **エンドポイント**: `https://api.openai.com/v1/videos`
+- **対応秒数**: 4/8/12秒（最寄りに丸め）
 - **アスペクト比**: 16:9
-- **解像度**: 1280×720
-- **コスト**: $0.04/秒（720p）
-- **Image-to-Video**: Base64画像を`image_url`として入力
+- **解像度**: `1280x720` / `1792x1024` / `720x1280` / `1024x1792`
+- **コスト**:
+  - `sora-2`: $0.10/秒（1280x720）
+  - `sora-2-pro`: $0.30/秒（1280x720）, $0.50/秒（1792x1024/1024x1792）
+- **Image-to-Video**: `multipart/form-data` で `input_reference` を入力
 
-### Google Veo 2
+### Google Veo 3.1 Fast
 
 - **用途**: 動画生成
 - **接続**: @google/genai SDK
-- **モデル**: `veo-2`
-- **対応秒数**: 5〜8秒
+- **モデル**: `veo-3.1-fast`（API送信時は `models/veo-3.1-fast-generate-preview` に正規化）
+- **対応秒数**: 4/6/8秒
 - **アスペクト比**: 16:9
 - **解像度**: 1920×1080
-- **コスト**: $0.75/秒
+- **コスト**: $0.15/秒（audio default）
 - **非同期**: `generateVideos` → Operation → ポーリング → レスポンス取得
 
 ---
@@ -371,22 +374,25 @@ Scene N (動画生成)
 
 | サービス | 単位 | 価格 |
 |---------|------|------|
-| Sora 480p | /秒 | $0.02 |
-| Sora 720p | /秒 | $0.04 |
-| Sora 1080p | /秒 | $0.10 |
-| Veo | /秒 | $0.75 |
-| Veo (Fast) | /秒 | $0.40 |
-| DALL-E 3 HD | /枚 | $0.12 |
+| Sora 2 (1280x720) | /秒 | $0.10 |
+| Sora 2 Pro (1280x720) | /秒 | $0.30 |
+| Sora 2 Pro (1792x1024 / 1024x1792) | /秒 | $0.50 |
+| Veo 3.1 Fast (audio default) | /秒 | $0.15 |
+| gpt-image-1.5 (high, 1536x1024) | /枚 | $0.20 |
+| nano banana pro (gemini-3-pro-image-preview) | /枚 | 約$0.134 |
 
 ### 現在の計算式
 
 ```
-シーンコスト = durationSec × 単価（API依存）
-画像コスト = シーン数 × $0.12
-プロジェクト合計 = Σシーンコスト + 画像コスト
+動画コスト = Σ(正規化秒数 × モデル別単価)
+  - Sora: 4/8/12秒へ丸め + モデル/解像度単価
+  - Veo 3.1 Fast: 4/6/8秒へ丸め + $0.15/秒
+画像コスト = Σ(scene.imageApi ごとの単価)
+プロジェクト合計 = 動画コスト + 画像コスト
 ```
 
 ※ LLM トークンコストは現在計算に含まれていない
+※ 価格は 2026-02 時点の公式公開価格に基づく。nano banana pro はトークン課金（output image token基準）なので目安値。
 
 ---
 

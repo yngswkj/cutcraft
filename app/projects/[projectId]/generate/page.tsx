@@ -14,6 +14,13 @@ import {
   Zap,
 } from 'lucide-react';
 import type { Project, Scene, VideoGeneration } from '@/types/project';
+import {
+  getSceneVideoChoice,
+  getSceneVideoLabel,
+  getSceneVideoSelection,
+  quantizeVeo31FastDuration,
+  type SceneVideoChoice,
+} from '@/lib/scene-models';
 import { formatCost, estimateSceneCost } from '@/lib/cost-calculator';
 import { ProjectStepNav } from '../_components/project-step-nav';
 import { ProjectStepMobileNav } from '../_components/project-step-mobile-nav';
@@ -22,10 +29,12 @@ export default function GeneratePage() {
   const params = useParams();
   const projectId = params.projectId as string;
   const [project, setProject] = useState<Project | null>(null);
+  const [soraModelForCost, setSoraModelForCost] = useState('sora-2');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [generatingScene, setGeneratingScene] = useState<string | null>(null);
   const [bulkGenerating, setBulkGenerating] = useState(false);
+  const [savingVideoApiScenes, setSavingVideoApiScenes] = useState<Set<string>>(new Set());
   const pollingRef = useRef<Record<string, NodeJS.Timeout>>({});
 
   const fetchProject = useCallback(async () => {
@@ -45,6 +54,18 @@ export default function GeneratePage() {
 
   useEffect(() => {
     fetchProject();
+    fetch('/api/settings')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        const model = data?.effective?.models?.soraModel;
+        if (typeof model === 'string' && model.trim()) {
+          setSoraModelForCost(model.trim());
+        }
+      })
+      .catch(() => {
+        // 設定取得失敗時はデフォルト単価を使用
+      });
+
     const currentPolling = pollingRef.current;
     return () => {
       Object.values(currentPolling).forEach(clearInterval);
@@ -175,6 +196,41 @@ export default function GeneratePage() {
     setProject(updated);
   };
 
+  const updateSceneVideoChoice = async (sceneId: string, choice: SceneVideoChoice) => {
+    if (!project) return;
+    setSavingVideoApiScenes(prev => new Set(prev).add(sceneId));
+    try {
+      const nextSelection = getSceneVideoSelection(choice);
+      const updated = {
+        ...project,
+        scenes: project.scenes.map((scene) =>
+          scene.id === sceneId ? { ...scene, ...nextSelection } : scene
+        ),
+      };
+
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || '動画APIの更新に失敗しました');
+      }
+      const nextProject = await res.json();
+      setProject(nextProject);
+    } catch (saveError) {
+      const message = saveError instanceof Error ? saveError.message : '動画APIの更新に失敗しました';
+      setError(message);
+    } finally {
+      setSavingVideoApiScenes(prev => {
+        const next = new Set(prev);
+        next.delete(sceneId);
+        return next;
+      });
+    }
+  };
+
   const proceedToComplete = async () => {
     if (!project) return;
     const res = await fetch(`/api/projects/${projectId}`, {
@@ -299,6 +355,14 @@ export default function GeneratePage() {
           {project.scenes.map((scene, index) => {
             const prevScene = index > 0 ? project.scenes[index - 1] : null;
             const canChain = prevScene && prevScene.approvedGenerationId;
+            const isProcessing = scene.generations.some((g) => g.status === 'processing');
+            const isSavingVideoApi = savingVideoApiScenes.has(scene.id);
+            const videoChoice = getSceneVideoChoice(scene);
+            const resolvedVeoDuration = scene.videoApi === 'veo'
+              ? quantizeVeo31FastDuration(scene.durationSec)
+              : null;
+            const showsResolvedVeoDuration = resolvedVeoDuration !== null
+              && resolvedVeoDuration !== scene.durationSec;
 
             return (
               <div key={scene.id} className="bg-white rounded-lg border border-gray-200 p-5">
@@ -315,25 +379,58 @@ export default function GeneratePage() {
                           ? 'bg-blue-50 text-blue-600'
                           : 'bg-purple-50 text-purple-600'
                       }`}>
-                        {scene.videoApi === 'sora' ? 'Sora' : 'Veo'}
+                        {getSceneVideoLabel(scene)}
                       </span>
                     </div>
                     <p className="text-sm text-gray-500 mt-1 line-clamp-2">
                       {scene.videoPrompt || scene.description}
                     </p>
+                    {showsResolvedVeoDuration && (
+                      <p className="text-xs text-purple-600 mt-1">
+                        実行秒数: {resolvedVeoDuration}秒（Veo 3.1 Fast）
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2 shrink-0 sm:ml-4">
-                    <span className="text-xs text-gray-400">{formatCost(estimateSceneCost(scene))}</span>
+                    <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => updateSceneVideoChoice(scene.id, 'sora')}
+                        disabled={isSavingVideoApi || isProcessing}
+                        className={`px-2 py-1 text-xs rounded-md transition ${
+                          videoChoice === 'sora'
+                            ? 'bg-primary-600 text-white'
+                            : 'text-gray-600 hover:bg-gray-100'
+                        } disabled:opacity-50`}
+                      >
+                        Sora
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateSceneVideoChoice(scene.id, 'veo31fast')}
+                        disabled={isSavingVideoApi || isProcessing}
+                        className={`px-2 py-1 text-xs rounded-md transition ${
+                          videoChoice === 'veo31fast'
+                            ? 'bg-primary-600 text-white'
+                            : 'text-gray-600 hover:bg-gray-100'
+                        } disabled:opacity-50`}
+                      >
+                        Veo 3.1 Fast
+                      </button>
+                    </div>
+                    <span className="text-xs text-gray-400">
+                      {formatCost(estimateSceneCost(scene, { soraModel: soraModelForCost }))}
+                    </span>
                     <button
                       onClick={() => startGeneration(scene)}
                       disabled={
                         generatingScene === scene.id ||
-                        scene.generations.some((g) => g.status === 'processing') ||
+                        isProcessing ||
                         scene.generations.some((g) => g.status === 'completed' && !g.localPath)
                       }
                       className="inline-flex items-center gap-1.5 bg-primary-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-primary-700 transition disabled:opacity-50"
                     >
-                      {scene.generations.some(g => g.status === 'processing') ? (
+                      {isProcessing ? (
                         <>
                           <Loader2 size={14} className="animate-spin" />
                           生成中

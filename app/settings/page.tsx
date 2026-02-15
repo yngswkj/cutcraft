@@ -355,7 +355,7 @@ export default function SettingsPage() {
           </button>
         </div>
         <p className="text-xs text-gray-500">
-          推奨例: LLM <code>gpt-5.1</code> / 画像 <code>dall-e-3</code> または <code>nanobananapro</code>（= <code>gemini-3-pro-image-preview</code>） / Sora <code>sora-2</code>
+          推奨例: LLM <code>gpt-5.1</code> / 画像 <code>gpt-image-1.5</code> または <code>nanobananapro</code>（= <code>gemini-3-pro-image-preview</code>） / Sora <code>sora-2</code> / Veo <code>veo-3.1-fast</code>
         </p>
 
         {models && (

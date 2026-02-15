@@ -83,6 +83,7 @@ export async function POST(request: Request) {
       prompt,
       durationSec: scene.durationSec,
       api: scene.videoApi,
+      modelOverride: scene.videoModelOverride || undefined,
       inputImagePath,
       version,
     });
