@@ -2,16 +2,13 @@ import { NextResponse } from 'next/server';
 import { withProjectLock } from '@/lib/project-store';
 import { startVideoGeneration, getChainedFramePath } from '@/lib/video-service';
 import type { VideoGeneration } from '@/types/project';
-
-const SAFE_PROJECT_ID_REGEX = /^[A-Za-z0-9-]+$/;
-const SAFE_SCENE_ID_REGEX = /^[A-Za-z0-9-]+$/;
-const SAFE_FILENAME_REGEX = /^[A-Za-z0-9._-]+$/;
+import { isSafeId, isSafeFilename } from '@/lib/validation';
 
 function parseImageInputPath(localPath: string, projectId: string): string | null {
   const prefix = `/api/files/${projectId}/images/`;
   if (!localPath.startsWith(prefix)) return null;
   const filename = localPath.slice(prefix.length);
-  if (!SAFE_FILENAME_REGEX.test(filename)) return null;
+  if (!isSafeFilename(filename)) return null;
   return `images/${filename}`;
 }
 
@@ -24,7 +21,7 @@ export async function POST(request: Request) {
   }
   const { projectId, sceneId } = body;
 
-  if (!projectId || !SAFE_PROJECT_ID_REGEX.test(projectId) || !sceneId || !SAFE_SCENE_ID_REGEX.test(sceneId)) {
+  if (!projectId || !isSafeId(projectId) || !sceneId || !isSafeId(sceneId)) {
     return NextResponse.json({ error: '不正なパラメータです' }, { status: 400 });
   }
 

@@ -7,28 +7,8 @@ import { resolveImageModelByApi } from '@/lib/scene-models';
 import { withProjectLock } from '@/lib/project-store';
 import { ensureProjectDir, saveFile, getProjectDir } from '@/lib/file-storage';
 import type { CharacterProfile, Project, Scene, SceneImage } from '@/types/project';
-
-const SAFE_ID_REGEX = /^[A-Za-z0-9-]+$/;
-const PNG_SIGNATURE = '89504e470d0a1a0a';
-
-function resolveImageExtension(imageBuffer: Buffer, mimeType?: string): '.png' | '.jpg' {
-  if (imageBuffer.length >= 8 && imageBuffer.subarray(0, 8).toString('hex') === PNG_SIGNATURE) {
-    return '.png';
-  }
-  if (
-    imageBuffer.length >= 3 &&
-    imageBuffer[0] === 0xff &&
-    imageBuffer[1] === 0xd8 &&
-    imageBuffer[2] === 0xff
-  ) {
-    return '.jpg';
-  }
-
-  const normalizedMimeType = mimeType?.trim().toLowerCase();
-  if (normalizedMimeType === 'image/png') return '.png';
-  if (normalizedMimeType === 'image/jpeg' || normalizedMimeType === 'image/jpg') return '.jpg';
-  return '.png';
-}
+import { isSafeId } from '@/lib/validation';
+import { resolveImageExtension } from '@/lib/image-utils';
 
 function nonEmpty(value: string): string {
   return value.trim();
@@ -151,7 +131,7 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
-  if (!SAFE_ID_REGEX.test(projectId) || !SAFE_ID_REGEX.test(sceneId)) {
+  if (!isSafeId(projectId) || !isSafeId(sceneId)) {
     return NextResponse.json(
       { error: '不正なパラメータです' },
       { status: 400 },

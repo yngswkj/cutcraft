@@ -15,11 +15,14 @@ import type {
   WorkflowStep,
 } from '@/types/project';
 import { VEO_31_FAST_MODEL } from '@/lib/scene-models';
+import {
+  isRecord,
+  isSafeId,
+  SAFE_ID_REGEX,
+  SAFE_FILENAME_REGEX,
+  SAFE_IMAGE_PATH_REGEX,
+} from '@/lib/validation';
 
-const SAFE_PROJECT_ID_REGEX = /^[A-Za-z0-9-]+$/;
-const SAFE_ID_REGEX = /^[A-Za-z0-9-]+$/;
-const SAFE_FILENAME_REGEX = /^[A-Za-z0-9._-]+$/;
-const SAFE_IMAGE_PATH_REGEX = /^images\/[A-Za-z0-9._-]+$/;
 const WORKFLOW_STEPS = new Set<WorkflowStep>(['blueprint', 'imageboard', 'script', 'generate', 'complete']);
 const VIDEO_API_PREFERENCES = new Set<VideoApiPreference>(['auto', 'sora', 'veo']);
 const VIDEO_APIS = new Set<'sora' | 'veo'>(['sora', 'veo']);
@@ -28,16 +31,8 @@ const VIDEO_STATUSES = new Set<VideoStatus>(['queued', 'processing', 'completed'
 const MAX_CHARACTER_COUNT = 30;
 const MAX_CHARACTER_FIELD_LENGTH = 1000;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isSafeProjectId(projectId: string): boolean {
-  return SAFE_PROJECT_ID_REGEX.test(projectId);
-}
-
 function parseSafeId(value: unknown): string | null {
-  if (typeof value !== 'string' || !SAFE_ID_REGEX.test(value)) return null;
+  if (typeof value !== 'string' || !isSafeId(value)) return null;
   return value;
 }
 
@@ -564,7 +559,7 @@ export async function GET(
   _request: Request,
   { params }: { params: { projectId: string } }
 ) {
-  if (!isSafeProjectId(params.projectId)) {
+  if (!isSafeId(params.projectId)) {
     return NextResponse.json({ error: '不正なprojectIdです' }, { status: 400 });
   }
 
@@ -579,7 +574,7 @@ export async function PUT(
   request: Request,
   { params }: { params: { projectId: string } }
 ) {
-  if (!isSafeProjectId(params.projectId)) {
+  if (!isSafeId(params.projectId)) {
     return NextResponse.json({ error: '不正なprojectIdです' }, { status: 400 });
   }
 
@@ -609,7 +604,7 @@ export async function DELETE(
   _request: Request,
   { params }: { params: { projectId: string } }
 ) {
-  if (!isSafeProjectId(params.projectId)) {
+  if (!isSafeId(params.projectId)) {
     return NextResponse.json({ error: '不正なprojectIdです' }, { status: 400 });
   }
 

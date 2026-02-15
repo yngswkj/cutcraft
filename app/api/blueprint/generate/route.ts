@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import { withProjectLock, createSceneFromBlueprint } from '@/lib/project-store';
 import { generateBlueprint } from '@/lib/openai';
 import type { Scene } from '@/types/project';
-
-const SAFE_PROJECT_ID_REGEX = /^[A-Za-z0-9-]+$/;
+import { isSafeId } from '@/lib/validation';
 
 export async function POST(request: Request) {
   let body: { projectId: string };
@@ -14,7 +13,7 @@ export async function POST(request: Request) {
   }
   const { projectId } = body;
 
-  if (!projectId || !SAFE_PROJECT_ID_REGEX.test(projectId)) {
+  if (!projectId || !isSafeId(projectId)) {
     return NextResponse.json({ error: '不正なprojectIdです' }, { status: 400 });
   }
 

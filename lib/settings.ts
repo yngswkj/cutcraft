@@ -1,5 +1,6 @@
 import path from 'path';
 import { readJsonFile, writeJsonFile } from './file-storage';
+import { isRecord } from './validation';
 import type {
   ApiKeyOverrides,
   EffectiveSettings,
@@ -88,10 +89,6 @@ export const DEFAULT_SETTINGS: Settings = {
   imageStylePresets: [],
   updatedAt: new Date(0).toISOString(),
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function parseOptionalSecret(value: unknown): string | null {
   if (typeof value !== 'string') return null;

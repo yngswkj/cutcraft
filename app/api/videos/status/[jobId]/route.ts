@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import { withProjectLock } from '@/lib/project-store';
 import { checkVideoStatus, downloadVideo } from '@/lib/video-service';
 import type { VideoGeneration } from '@/types/project';
-
-const SAFE_ID_REGEX = /^[A-Za-z0-9-]+$/;
+import { isSafeId } from '@/lib/validation';
 
 export async function GET(
   request: Request,
@@ -16,7 +15,7 @@ export async function GET(
   if (!projectId || !sceneId) {
     return NextResponse.json({ error: 'projectIdとsceneIdが必要です' }, { status: 400 });
   }
-  if (!SAFE_ID_REGEX.test(projectId) || !SAFE_ID_REGEX.test(sceneId) || !SAFE_ID_REGEX.test(params.jobId)) {
+  if (!isSafeId(projectId) || !isSafeId(sceneId) || !isSafeId(params.jobId)) {
     return NextResponse.json({ error: '不正なパラメータです' }, { status: 400 });
   }
 

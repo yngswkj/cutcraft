@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateVideoScript, type GenerateScriptResult } from '@/lib/openai';
 import { getSceneVideoLabel, getSceneVideoChoice } from '@/lib/scene-models';
 import { withProjectLock } from '@/lib/project-store';
-
-const SAFE_ID_REGEX = /^[A-Za-z0-9-]+$/;
+import { isSafeId } from '@/lib/validation';
 
 export async function POST(req: NextRequest) {
   let body: { projectId: string; sceneId: string };
@@ -21,7 +20,7 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
-  if (!SAFE_ID_REGEX.test(projectId) || !SAFE_ID_REGEX.test(sceneId)) {
+  if (!isSafeId(projectId) || !isSafeId(sceneId)) {
     return NextResponse.json(
       { error: '不正なパラメータです' },
       { status: 400 },

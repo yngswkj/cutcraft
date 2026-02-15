@@ -5,13 +5,10 @@ import {
   SettingsValidationError,
   updateSettings,
 } from '@/lib/settings';
+import { isRecord } from '@/lib/validation';
 import type { SettingsResetAction, SettingsUpdateInput } from '@/types/settings';
 
 const RESET_ACTIONS = new Set<SettingsResetAction>(['reset-prompts', 'reset-models', 'reset-all']);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function isResetAction(value: unknown): value is SettingsResetAction {
   return typeof value === 'string' && RESET_ACTIONS.has(value as SettingsResetAction);

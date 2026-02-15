@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs/promises';
+import { createReadStream, statSync } from 'fs';
+import { Readable } from 'stream';
 import path from 'path';
 import { getProjectDir } from '@/lib/file-storage';
-
-const SAFE_PROJECT_ID_REGEX = /^[A-Za-z0-9-]+$/;
+import { isSafeId, isSafeFilename } from '@/lib/validation';
 
 export async function GET(
   _req: NextRequest,
@@ -11,20 +11,23 @@ export async function GET(
 ) {
   try {
     const { projectId, filename } = await params;
-    if (!SAFE_PROJECT_ID_REGEX.test(projectId)) {
+    if (!isSafeId(projectId)) {
       return NextResponse.json({ error: '不正なprojectIdです' }, { status: 400 });
     }
-    if (!/^[A-Za-z0-9._-]+$/.test(filename)) {
+    if (!isSafeFilename(filename)) {
       return NextResponse.json({ error: '不正なファイル名です' }, { status: 400 });
     }
 
     const filePath = path.join(getProjectDir(projectId), 'videos', filename);
 
-    const fileBuffer = await fs.readFile(filePath);
+    const stat = statSync(filePath);
+    const stream = createReadStream(filePath);
+    const webStream = Readable.toWeb(stream) as ReadableStream;
 
-    return new NextResponse(fileBuffer, {
+    return new NextResponse(webStream, {
       headers: {
         'Content-Type': 'video/mp4',
+        'Content-Length': String(stat.size),
         'Cache-Control': 'public, max-age=31536000, immutable',
       },
     });

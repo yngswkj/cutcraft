@@ -161,11 +161,8 @@ function normalizeProject(project: Project): Project {
 
 export async function listProjects(): Promise<Project[]> {
   const ids = await listDirs(getProjectDir('').replace(/[/\\][/\\]?$/, ''));
-  const projects: Project[] = [];
-  for (const id of ids) {
-    const project = await getProject(id);
-    if (project) projects.push(project);
-  }
+  const results = await Promise.all(ids.map((id) => getProject(id)));
+  const projects = results.filter((p): p is Project => p !== null);
   return projects.sort((a, b) =>
     new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
   );
