@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getProject, updateProject, deleteProject } from '@/lib/project-store';
+import { getProject, updateProject, deleteProject, withProjectLock } from '@/lib/project-store';
 import type {
   CharacterProfile,
   ImageApi,
@@ -583,18 +583,24 @@ export async function PUT(
     return NextResponse.json({ error: '不正なprojectIdです' }, { status: 400 });
   }
 
-  const existing = await getProject(params.projectId);
-  if (!existing) {
-    return NextResponse.json({ error: 'プロジェクトが見つかりません' }, { status: 404 });
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'リクエストボディが不正です' }, { status: 400 });
   }
 
   try {
-    const body = await request.json();
-    const sanitized = sanitizeProjectUpdate(existing, body, params.projectId);
-    const updated = await updateProject({ ...sanitized, id: existing.id });
+    const { result: updated } = await withProjectLock(params.projectId, async (existing) => {
+      const sanitized = sanitizeProjectUpdate(existing, body, params.projectId);
+      return { project: { ...sanitized, id: existing.id }, result: { ...sanitized, id: existing.id } };
+    });
     return NextResponse.json(updated);
   } catch (error) {
     const message = error instanceof Error ? error.message : '更新データが不正です';
+    if (message === 'プロジェクトが見つかりません') {
+      return NextResponse.json({ error: message }, { status: 404 });
+    }
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

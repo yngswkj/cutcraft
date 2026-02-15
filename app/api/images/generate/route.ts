@@ -4,7 +4,7 @@ import path from 'path';
 import sharp from 'sharp';
 import { generateImage } from '@/lib/openai';
 import { resolveImageModelByApi } from '@/lib/scene-models';
-import { getProject, updateProject } from '@/lib/project-store';
+import { withProjectLock } from '@/lib/project-store';
 import { ensureProjectDir, saveFile, getProjectDir } from '@/lib/file-storage';
 import type { CharacterProfile, Project, Scene, SceneImage } from '@/types/project';
 
@@ -136,77 +136,81 @@ function buildConsistentImagePrompt(
 }
 
 export async function POST(req: NextRequest) {
+  let body: { projectId: string; sceneId: string; prompt: string };
   try {
-    const { projectId, sceneId, prompt } = await req.json();
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'リクエストボディが不正です' }, { status: 400 });
+  }
 
-    if (!projectId || !sceneId || !prompt) {
-      return NextResponse.json(
-        { error: '必須パラメータが不足しています' },
-        { status: 400 },
-      );
-    }
-    if (!SAFE_ID_REGEX.test(projectId) || !SAFE_ID_REGEX.test(sceneId)) {
-      return NextResponse.json(
-        { error: '不正なパラメータです' },
-        { status: 400 },
-      );
-    }
+  const { projectId, sceneId, prompt } = body;
 
-    // プロジェクト取得
-    const project = await getProject(projectId);
-    if (!project) {
-      return NextResponse.json({ error: 'プロジェクトが見つかりません' }, { status: 404 });
-    }
+  if (!projectId || !sceneId || !prompt) {
+    return NextResponse.json(
+      { error: '必須パラメータが不足しています' },
+      { status: 400 },
+    );
+  }
+  if (!SAFE_ID_REGEX.test(projectId) || !SAFE_ID_REGEX.test(sceneId)) {
+    return NextResponse.json(
+      { error: '不正なパラメータです' },
+      { status: 400 },
+    );
+  }
 
-    const scene = project.scenes.find((s) => s.id === sceneId);
-    if (!scene) {
-      return NextResponse.json({ error: 'シーンが見つかりません' }, { status: 404 });
-    }
+  try {
+    const { result: sceneImage } = await withProjectLock<SceneImage>(projectId, async (project) => {
+      const scene = project.scenes.find((s) => s.id === sceneId);
+      if (!scene) {
+        throw new Error('シーンが見つかりません');
+      }
 
-    // 設定された画像モデルで画像生成
-    const consistentPrompt = buildConsistentImagePrompt(project, scene, prompt);
-    const imageModel = resolveImageModelByApi(scene.imageApi);
-    const result = await generateImage(consistentPrompt, { modelOverride: imageModel });
+      // 設定された画像モデルで画像生成
+      const consistentPrompt = buildConsistentImagePrompt(project, scene, prompt);
+      const imageModel = resolveImageModelByApi(scene.imageApi);
+      const result = await generateImage(consistentPrompt, { modelOverride: imageModel });
 
-    // Base64をBufferに変換
-    const imageBuffer = Buffer.from(result.b64_json, 'base64');
-    const metadata = await sharp(imageBuffer).metadata();
-    const width = typeof metadata.width === 'number' ? metadata.width : 1536;
-    const height = typeof metadata.height === 'number' ? metadata.height : 1024;
+      // Base64をBufferに変換
+      const imageBuffer = Buffer.from(result.b64_json, 'base64');
+      const metadata = await sharp(imageBuffer).metadata();
+      const width = typeof metadata.width === 'number' ? metadata.width : 1536;
+      const height = typeof metadata.height === 'number' ? metadata.height : 1024;
 
-    // ファイル保存
-    await ensureProjectDir(projectId);
-    const imageId = uuidv4();
-    const extension = resolveImageExtension(imageBuffer, result.mimeType);
-    const fileName = `${sceneId}_${imageId}${extension}`;
-    const imagePath = path.join(getProjectDir(projectId), 'images', fileName);
-    await saveFile(imagePath, imageBuffer);
+      // ファイル保存
+      await ensureProjectDir(projectId);
+      const imageId = uuidv4();
+      const extension = resolveImageExtension(imageBuffer, result.mimeType);
+      const fileName = `${sceneId}_${imageId}${extension}`;
+      const imagePath = path.join(getProjectDir(projectId), 'images', fileName);
+      await saveFile(imagePath, imageBuffer);
 
-    // SceneImageオブジェクト作成
-    const sceneImage: SceneImage = {
-      id: imageId,
-      sceneId,
-      prompt: result.revised_prompt || consistentPrompt,
-      localPath: `/api/files/${projectId}/images/${fileName}`,
-      width,
-      height,
-      createdAt: new Date().toISOString(),
-    };
+      // SceneImageオブジェクト作成
+      const sceneImage: SceneImage = {
+        id: imageId,
+        sceneId,
+        prompt: result.revised_prompt || consistentPrompt,
+        localPath: `/api/files/${projectId}/images/${fileName}`,
+        width,
+        height,
+        createdAt: new Date().toISOString(),
+      };
 
-    // プロジェクトに画像情報を追加
-    scene.images.push(sceneImage);
-    if (!scene.selectedImageId) {
-      scene.selectedImageId = imageId;
-    }
+      // プロジェクトに画像情報を追加
+      scene.images.push(sceneImage);
+      if (!scene.selectedImageId) {
+        scene.selectedImageId = imageId;
+      }
 
-    await updateProject(project);
+      return { project, result: sceneImage };
+    });
 
     return NextResponse.json({ image: sceneImage });
   } catch (error) {
     console.error('Image generation error:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : '画像生成に失敗しました' },
-      { status: 500 },
-    );
+    const message = error instanceof Error ? error.message : '画像生成に失敗しました';
+    if (message === 'プロジェクトが見つかりません' || message === 'シーンが見つかりません') {
+      return NextResponse.json({ error: message }, { status: 404 });
+    }
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -19,6 +19,49 @@ import {
   getProjectFilePath,
 } from './file-storage';
 
+// プロジェクト単位の排他ロック
+const projectLocks = new Map<string, Promise<void>>();
+
+async function acquireProjectLock(projectId: string): Promise<() => void> {
+  while (projectLocks.has(projectId)) {
+    await projectLocks.get(projectId);
+  }
+  let releaseFn: () => void;
+  const lockPromise = new Promise<void>((resolve) => {
+    releaseFn = resolve;
+  });
+  projectLocks.set(projectId, lockPromise);
+  return () => {
+    projectLocks.delete(projectId);
+    releaseFn!();
+  };
+}
+
+/**
+ * プロジェクトをロック付きで読み取り→変更→書き込みする。
+ * 同一プロジェクトへの並行書き込みによるデータ消失を防止する。
+ *
+ * コールバックは変更済みのプロジェクトとオプションの追加データを返す。
+ * プロジェクトは自動的に保存される。
+ */
+export async function withProjectLock<T = void>(
+  projectId: string,
+  fn: (project: Project) => Promise<{ project: Project; result: T }>,
+): Promise<{ project: Project; result: T }> {
+  const release = await acquireProjectLock(projectId);
+  try {
+    const project = await getProject(projectId);
+    if (!project) {
+      throw new Error('プロジェクトが見つかりません');
+    }
+    const outcome = await fn(project);
+    await updateProject(outcome.project);
+    return outcome;
+  } finally {
+    release();
+  }
+}
+
 export function getDefaultImageStyleGuide(): ImageStyleGuide {
   return {
     styleBible: '',
@@ -156,9 +199,9 @@ export async function createProject(name: string, theme: string): Promise<Projec
 }
 
 export async function updateProject(project: Project): Promise<Project> {
-  project.updatedAt = new Date().toISOString();
-  await writeJsonFile(getProjectFilePath(project.id), project);
-  return project;
+  const updated = { ...project, updatedAt: new Date().toISOString() };
+  await writeJsonFile(getProjectFilePath(updated.id), updated);
+  return updated;
 }
 
 export async function deleteProject(projectId: string): Promise<void> {

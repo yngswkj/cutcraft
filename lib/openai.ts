@@ -121,7 +121,44 @@ export async function generateBlueprint(
 
   const content = response.choices[0]?.message?.content;
   if (!content) throw new Error('LLMからの応答が空です');
-  return JSON.parse(content) as BlueprintResult;
+  return validateBlueprintResult(JSON.parse(content));
+}
+
+function validateBlueprintResult(data: unknown): BlueprintResult {
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+    throw new Error('LLM応答が不正な形式です（オブジェクトではありません）');
+  }
+  const obj = data as Record<string, unknown>;
+  if (!Array.isArray(obj.scenes)) {
+    throw new Error('LLM応答にscenes配列がありません');
+  }
+  const scenes = obj.scenes.map((scene: unknown, i: number) => {
+    if (typeof scene !== 'object' || scene === null || Array.isArray(scene)) {
+      throw new Error(`LLM応答のscenes[${i}]が不正です`);
+    }
+    const s = scene as Record<string, unknown>;
+    if (typeof s.title !== 'string' || !s.title.trim()) {
+      throw new Error(`LLM応答のscenes[${i}].titleが不正です`);
+    }
+    if (typeof s.description !== 'string' || !s.description.trim()) {
+      throw new Error(`LLM応答のscenes[${i}].descriptionが不正です`);
+    }
+    const durationSec = typeof s.durationSec === 'number' && Number.isFinite(s.durationSec) && s.durationSec > 0
+      ? s.durationSec
+      : 8;
+    const styleDirection = typeof s.styleDirection === 'string' ? s.styleDirection : '';
+    const suggestedApi: 'sora' | 'veo' = s.suggestedApi === 'veo'
+      ? 'veo'
+      : 'sora';
+    return {
+      title: s.title as string,
+      description: s.description as string,
+      durationSec,
+      styleDirection,
+      suggestedApi,
+    };
+  });
+  return { scenes };
 }
 
 export interface GenerateImageResult {
@@ -236,5 +273,27 @@ export async function generateVideoScript(
 
   const content = response.choices[0]?.message?.content;
   if (!content) throw new Error('LLMからの応答が空です');
-  return JSON.parse(content) as GenerateScriptResult;
+  return validateScriptResult(JSON.parse(content));
+}
+
+function validateScriptResult(data: unknown): GenerateScriptResult {
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+    throw new Error('LLM応答が不正な形式です（オブジェクトではありません）');
+  }
+  const obj = data as Record<string, unknown>;
+  if (typeof obj.videoPrompt !== 'string' || !obj.videoPrompt.trim()) {
+    throw new Error('LLM応答にvideoPromptがありません');
+  }
+  const meta = typeof obj.metadata === 'object' && obj.metadata !== null && !Array.isArray(obj.metadata)
+    ? obj.metadata as Record<string, unknown>
+    : {};
+  return {
+    videoPrompt: obj.videoPrompt,
+    metadata: {
+      cameraWork: typeof meta.cameraWork === 'string' ? meta.cameraWork : '',
+      movement: typeof meta.movement === 'string' ? meta.movement : '',
+      lighting: typeof meta.lighting === 'string' ? meta.lighting : '',
+      style: typeof meta.style === 'string' ? meta.style : '',
+    },
+  };
 }

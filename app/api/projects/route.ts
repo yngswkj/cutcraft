@@ -7,8 +7,13 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const body = await request.json();
-  const { name, theme } = body as { name: string; theme: string };
+  let body: { name: string; theme: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'リクエストボディが不正です' }, { status: 400 });
+  }
+  const { name, theme } = body;
 
   if (!name || !theme) {
     return NextResponse.json({ error: '名前とテーマは必須です' }, { status: 400 });
